@@ -43,18 +43,17 @@ users:
     shell: /bin/bash
     password: "$6$ЗАМЕНИТЕ$НА_ХЭШ_ПАРОЛЯ"
     sudo_nopasswd: true
-    has_authorized_keys: true
-    has_bashrc: true
+    ssh_public_keys:
+      - "ssh-ed25519 ЗАМЕНИТЕ_НА_ВАШ_ПУБЛИЧНЫЙ_КЛЮЧ ansible"
   ca:
     groups: []
     shell: /bin/bash
     password: "$6$ЗАМЕНИТЕ$НА_ХЭШ_ПАРОЛЯ"
     sudo_nopasswd: true
-    has_authorized_keys: true
-    has_bashrc: false
+    ssh_public_keys:
+      - "ssh-ed25519 ЗАМЕНИТЕ_НА_ВАШ_ПУБЛИЧНЫЙ_КЛЮЧ ansible"
   root:
     password: "$6$ЗАМЕНИТЕ$НА_ХЭШ_ПАРОЛЯ"
-    has_bashrc: true
 
 # ── Сертификаты (ACME через Caddy) ───────────────────────────────────────────
 # Caddy автоматически получает и обновляет сертификат через Let's Encrypt.

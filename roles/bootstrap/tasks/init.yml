@@ -44,47 +44,15 @@
     label: "{{ item.key }}"
   when: item.key != 'root'
 
-- name: "[users] Создать ~/.ssh для {{ item.key }}"
-  file:
-    path: "/home/{{ item.key }}/.ssh"
-    state: directory
-    owner: "{{ item.key }}"
-    group: "{{ item.key }}"
-    mode: "0700"
-  loop: "{{ users | dict2items }}"
+- name: "[users] SSH authorized_keys для {{ item.0.key }}"
+  authorized_key:
+    user: "{{ item.0.key }}"
+    key: "{{ item.1 }}"
+    state: present
+  loop: "{{ users | dict2items | subelements('value.ssh_public_keys', skip_missing=True) }}"
   loop_control:
-    label: "{{ item.key }}"
-  when:
-    - item.key != 'root'
-    - item.value.has_authorized_keys | default(false)
+    label: "{{ item.0.key }}"
 
-- name: "[users] authorized_keys для {{ item.key }}"
-  copy:
-    src: "files/{{ item.key }}/authorized_keys"
-    dest: "/home/{{ item.key }}/.ssh/authorized_keys"
-    owner: "{{ item.key }}"
-    group: "{{ item.key }}"
-    mode: "0600"
-  loop: "{{ users | dict2items }}"
-  loop_control:
-    label: "{{ item.key }}"
-  when:
-    - item.key != 'root'
-    - item.value.has_authorized_keys | default(false)
-
-- name: "[users] .bashrc для {{ item.key }}"
-  copy:
-    src: "files/{{ item.key }}/.bashrc"
-    dest: "/home/{{ item.key }}/.bashrc"
-    owner: "{{ item.key }}"
-    group: "{{ item.key }}"
-    mode: "0644"
-  loop: "{{ users | dict2items }}"
-  loop_control:
-    label: "{{ item.key }}"
-  when:
-    - item.key != 'root'
-    - item.value.has_bashrc | default(false)
 
 - name: "[users] sudo без пароля для {{ item.key }}"
   copy:
@@ -107,15 +75,6 @@
   user:
     name: root
     password: "{{ users.root.password }}"
-
-- name: "[users] .bashrc для root"
-  copy:
-    src: "files/root/.bashrc"
-    dest: /root/.bashrc
-    owner: root
-    group: root
-    mode: "0644"
-  when: users.root.has_bashrc | default(false)
 
 # ── SSH hardening ─────────────────────────────────────────────────────────────
 

@@ -57,8 +57,15 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 | `caddy_https_port` | HTTPS-порт Caddy (8443 по умолчанию, т.к. 443 занят 3x-ui) |
 | `caddy_redirect_url` | Куда Caddy проксирует запросы (обычно `127.0.0.1:2053`) |
 | `users.*.password` | Хэши паролей SHA-512 (см. ниже) |
+| `users.*.ssh_public_keys` | Публичные SSH-ключи (см. ниже) |
 | `ipset_hosts` | Список доверенных IP с полным доступом |
 | `allowed_tcp_ports` | Открытые TCP-порты (80, 443, 8443 по умолчанию) |
+
+**SSH-ключи — вставить прямо в конфиг:**
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+Скопировать вывод в `users.<user>.ssh_public_keys`.
 
 **Сгенерировать хэш пароля:**
 ```bash
@@ -73,37 +80,14 @@ ansible-vault encrypt group_vars/new_vps.yml
 
 ---
 
-### A4. Подготовить файлы с эталонного сервера
+### A4. Скопировать x-ui.db с эталонного сервера
 
-Создать каталоги для каждого пользователя из конфига:
+Это единственный файл, который нужно взять с эталона:
+
 ```bash
-mkdir -p roles/bootstrap/files/{ИМЯ_ПОЛЬЗОВАТЕЛЯ,root}
-# Пример: mkdir -p roles/bootstrap/files/{myuser,root}
+mkdir -p roles/bootstrap/files/
+scp root@<IP_ЭТАЛОНА>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 ```
-
-Скопировать файлы:
-```bash
-ETALON=root@<IP_ЭТАЛОНА>
-USER=<deploy_user>
-
-# SSH-ключи
-scp $ETALON:/home/$USER/.ssh/authorized_keys \
-    roles/bootstrap/files/$USER/authorized_keys
-
-# Добавить ключ Ansible к пользователю
-cat ~/.ssh/id_ed25519.pub >> roles/bootstrap/files/$USER/authorized_keys
-
-# .bashrc (если has_bashrc: true)
-scp $ETALON:/home/$USER/.bashrc  roles/bootstrap/files/$USER/.bashrc
-scp $ETALON:/root/.bashrc        roles/bootstrap/files/root/.bashrc
-
-# 3x-ui база данных
-scp $ETALON:/etc/x-ui/x-ui.db   roles/bootstrap/files/x-ui.db
-```
-
-> **Что копировать НЕ нужно:**
-> `sysctl.conf`, `rules.v4/v6`, `Caddyfile` — генерируются из переменных.
-> TLS-сертификаты — Caddy получает их сам через Let's Encrypt.
 
 > **Важно про `certs_dest_dir`:**
 > Путь, куда cert-sync кладёт сертификаты, **должен совпадать** с настройками TLS
@@ -159,7 +143,7 @@ ansible-playbook -i inventory.ini site-init.yml
 Что происходит:
 1. `apt full-upgrade` (если есть обновления — перезагрузка)
 2. Установка пакетов из `extra_packages`
-3. Создание пользователей, SSH-ключи, .bashrc, sudoers
+3. Создание пользователей, SSH-ключи из конфига, sudoers
 4. Hostname
 5. SSH hardening: кастомный порт, root закрыт, только ключи
 6. sysctl, ipset, iptables

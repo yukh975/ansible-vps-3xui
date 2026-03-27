@@ -79,9 +79,7 @@ ansible-vps/
 │   │   ├── cert-sync.sh.j2          # Скрипт синхронизации сертов
 │   │   └── caddy-override.conf.j2   # systemd drop-in (ExecStartPost)
 │   └── files/                       # Файлы с эталона (в .gitignore!)
-│       ├── x-ui.db
-│       ├── <user>/authorized_keys
-│       └── <user>/.bashrc
+│       └── x-ui.db                  # единственный файл с эталона
 ├── INSTALL.md                       # Пошаговая инструкция
 └── CHANGELOG.md
 ```
@@ -110,11 +108,11 @@ users:
     shell: /bin/bash
     password: "$6$..."           # openssl passwd -6 'ПАРОЛЬ'
     sudo_nopasswd: true
-    has_authorized_keys: true    # нужен файл files/myuser/authorized_keys
-    has_bashrc: true             # нужен файл files/myuser/.bashrc
+    ssh_public_keys:             # публичные ключи: cat ~/.ssh/id_ed25519.pub
+      - "ssh-ed25519 AAAA... ansible"
+      - "ssh-ed25519 AAAA... laptop"   # можно несколько
   root:
-    password: "$6$..."
-    has_bashrc: true             # нужен файл files/root/.bashrc
+    password: "$6$..."             # нужен файл files/root/.bashrc
 ```
 
 ### Сертификаты
