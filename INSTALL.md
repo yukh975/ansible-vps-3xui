@@ -56,7 +56,6 @@ cat ~/.ssh/id_ed25519.pub
 В нём хранятся инбаунды и настройки TLS.
 
 ```bash
-mkdir -p roles/bootstrap/files/
 scp root@<IP_ЭТАЛОНА>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 ```
 
