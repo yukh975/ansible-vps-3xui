@@ -1,0 +1,67 @@
+---
+# =============================================================================
+# group_vars/new_vps.yml — переменные для всех новых нод
+# =============================================================================
+
+# ── SSH ───────────────────────────────────────────────────────────────────────
+ssh_port: 275
+
+# ── Пользователи ──────────────────────────────────────────────────────────────
+#
+# Пароли хранятся в виде хэша SHA-512.
+# Сгенерировать хэш на control node:
+#   openssl passwd -6 'ВАШ_ПАРОЛЬ'
+# или:
+#   python3 -c "from passlib.hash import sha512_crypt; print(sha512_crypt.hash('ВАШ_ПАРОЛЬ'))"
+#
+users:
+  yukh:
+    groups: ["sudo", "root"]
+    shell: /bin/bash
+    password: "$6$ЗАМЕНИТЕ$НА_ХЭШ_ПАРОЛЯ_YUKH"
+    # authorized_keys берётся из files/yukh/authorized_keys
+    # .bashrc берётся из files/yukh/.bashrc
+  ca:
+    groups: []
+    shell: /bin/bash
+    password: "$6$ЗАМЕНИТЕ$НА_ХЭШ_ПАРОЛЯ_CA"
+    # authorized_keys берётся из files/ca/authorized_keys
+  root:
+    password: "$6$ЗАМЕНИТЕ$НА_ХЭШ_ПАРОЛЯ_ROOT"
+    # .bashrc берётся из files/root/.bashrc
+
+# ── 3x-ui ─────────────────────────────────────────────────────────────────────
+xui_version: ""           # пусто = latest; или "2.3.11"
+xui_db_src: "files/x-ui.db"
+xui_db_dest: "/etc/x-ui/x-ui.db"
+
+# ── Пакеты ───────────────────────────────────────────────────────────────────
+extra_packages:
+  - iptables
+  - iptables-persistent
+  - ipset
+  - netfilter-persistent
+  - curl
+  - wget
+  - sqlite3
+  - unzip
+  - ca-certificates
+  - gnupg
+  - mc
+  - micro
+  - dnsutils       # nslookup
+  - telnet
+  - traceroute
+
+# ── Файлы конфигурации ────────────────────────────────────────────────────────
+sysctl_src: "files/sysctl.conf"
+sysctl_dest: "/etc/sysctl.d/99-custom.conf"
+
+iptables_rules_v4_src: "files/rules.v4"
+iptables_rules_v4_dest: "/etc/iptables/rules.v4"
+
+iptables_rules_v6_src: "files/rules.v6"
+iptables_rules_v6_dest: "/etc/iptables/rules.v6"
+
+ipset_src: "files/ipset.conf"
+ipset_dest: "/etc/ipset.conf"

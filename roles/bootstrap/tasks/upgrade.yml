@@ -1,0 +1,31 @@
+---
+# =============================================================================
+# Фаза 1: полное обновление ОС и перезагрузка
+# =============================================================================
+
+- name: "[upgrade] apt update"
+  apt:
+    update_cache: yes
+    cache_valid_time: 0    # всегда обновлять при этой фазе
+
+- name: "[upgrade] apt full-upgrade"
+  apt:
+    upgrade: full
+    autoremove: yes
+    autoclean: yes
+  register: _apt_upgrade
+
+- name: "[upgrade] Перезагрузка после upgrade"
+  reboot:
+    msg: "Reboot after apt full-upgrade"
+    reboot_timeout: 300
+    connect_timeout: 10
+    pre_reboot_delay: 5
+    post_reboot_delay: 15
+    test_command: "systemctl is-system-running || true"
+  when: _apt_upgrade.changed
+
+- name: "[upgrade] Пропустить перезагрузку (ничего не изменилось)"
+  debug:
+    msg: "Система уже актуальна, перезагрузка не требуется"
+  when: not _apt_upgrade.changed

@@ -1,0 +1,275 @@
+---
+# =============================================================================
+# Фаза 2: hardening, пользователи, firewall, sysctl, 3x-ui
+# =============================================================================
+
+# ── Пакеты ───────────────────────────────────────────────────────────────────
+
+- name: "[pkg] apt update"
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: "[pkg] Установить необходимые пакеты"
+  apt:
+    name: "{{ extra_packages }}"
+    state: present
+
+# ── Пользователи ─────────────────────────────────────────────────────────────
+
+- name: "[users] Создать пользователя yukh"
+  user:
+    name: yukh
+    groups: "{{ users.yukh.groups | join(',') }}"
+    append: yes
+    shell: "{{ users.yukh.shell }}"
+    password: "{{ users.yukh.password }}"
+    create_home: yes
+    state: present
+
+- name: "[users] Создать ~/.ssh для yukh"
+  file:
+    path: /home/yukh/.ssh
+    state: directory
+    owner: yukh
+    group: yukh
+    mode: "0700"
+
+- name: "[users] authorized_keys для yukh"
+  copy:
+    src: "files/yukh/authorized_keys"
+    dest: /home/yukh/.ssh/authorized_keys
+    owner: yukh
+    group: yukh
+    mode: "0600"
+
+- name: "[users] .bashrc для yukh"
+  copy:
+    src: "files/yukh/.bashrc"
+    dest: /home/yukh/.bashrc
+    owner: yukh
+    group: yukh
+    mode: "0644"
+
+- name: "[users] Создать пользователя ca"
+  user:
+    name: ca
+    groups: ""
+    shell: "{{ users.ca.shell }}"
+    password: "{{ users.ca.password }}"
+    create_home: yes
+    state: present
+
+- name: "[users] Создать ~/.ssh для ca"
+  file:
+    path: /home/ca/.ssh
+    state: directory
+    owner: ca
+    group: ca
+    mode: "0700"
+
+- name: "[users] authorized_keys для ca"
+  copy:
+    src: "files/ca/authorized_keys"
+    dest: /home/ca/.ssh/authorized_keys
+    owner: ca
+    group: ca
+    mode: "0600"
+
+- name: "[users] sudo без пароля для ca"
+  copy:
+    dest: /etc/sudoers.d/ca
+    content: "ca ALL=(ALL) NOPASSWD: ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+
+- name: "[users] Установить пароль root"
+  user:
+    name: root
+    password: "{{ users.root.password }}"
+
+- name: "[users] .bashrc для root"
+  copy:
+    src: "files/root/.bashrc"
+    dest: /root/.bashrc
+    owner: root
+    group: root
+    mode: "0644"
+
+# ── SSH hardening ─────────────────────────────────────────────────────────────
+# ВАЖНО: ключи и пароли настроены выше — только теперь закрываем root/пароль
+
+- name: "[ssh] Задеплоить sshd_config"
+  template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "0600"
+    validate: "sshd -t -f %s"
+  notify: restart sshd
+
+- name: "[ssh] Убедиться что sshd запущен"
+  systemd:
+    name: ssh
+    state: started
+    enabled: yes
+
+- name: "[ssh] Применить новый sshd_config немедленно"
+  meta: flush_handlers
+
+# ── sysctl ────────────────────────────────────────────────────────────────────
+
+- name: "[sysctl] Доставить конфиг"
+  copy:
+    src: "{{ sysctl_src }}"
+    dest: "{{ sysctl_dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload sysctl
+
+- name: "[sysctl] Применить немедленно"
+  meta: flush_handlers
+
+# ── ipset ─────────────────────────────────────────────────────────────────────
+
+- name: "[ipset] Доставить конфиг"
+  copy:
+    src: "{{ ipset_src }}"
+    dest: "{{ ipset_dest }}"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: "[ipset] Применить"
+  command: ipset restore -f {{ ipset_dest }}
+  ignore_errors: true
+
+- name: "[ipset] Включить netfilter-persistent"
+  systemd:
+    name: netfilter-persistent
+    enabled: yes
+
+# ── iptables ──────────────────────────────────────────────────────────────────
+
+- name: "[iptables] Создать /etc/iptables"
+  file:
+    path: /etc/iptables
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: "[iptables] Доставить правила IPv4"
+  copy:
+    src: "{{ iptables_rules_v4_src }}"
+    dest: "{{ iptables_rules_v4_dest }}"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: restore iptables v4
+
+- name: "[iptables] Доставить правила IPv6"
+  copy:
+    src: "{{ iptables_rules_v6_src }}"
+    dest: "{{ iptables_rules_v6_dest }}"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: restore iptables v6
+
+- name: "[iptables] Применить правила немедленно"
+  meta: flush_handlers
+
+- name: "[iptables] netfilter-persistent save"
+  command: netfilter-persistent save
+  changed_when: true
+
+# ── 3x-ui ─────────────────────────────────────────────────────────────────────
+
+- name: "[3xui] Проверить — уже установлен?"
+  stat:
+    path: /usr/local/x-ui/x-ui
+  register: _xui_binary
+
+- name: "[3xui] Установить 3x-ui"
+  shell: |
+    set -euo pipefail
+    VER="{{ xui_version | default('') }}"
+    if [[ -n "$VER" ]]; then
+      bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/main/install.sh) "$VER" <<< "n"
+    else
+      bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/main/install.sh) <<< "n"
+    fi
+  args:
+    executable: /bin/bash
+  async: 360
+  poll: 15
+  when: not _xui_binary.stat.exists
+
+- name: "[3xui] Остановить x-ui перед заменой БД"
+  systemd:
+    name: x-ui
+    state: stopped
+  ignore_errors: true
+
+- name: "[3xui] Создать /etc/x-ui"
+  file:
+    path: /etc/x-ui
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: "[3xui] Залить x-ui.db"
+  copy:
+    src: "{{ xui_db_src }}"
+    dest: "{{ xui_db_dest }}"
+    owner: root
+    group: root
+    mode: "0600"
+    backup: yes
+
+- name: "[3xui] Включить x-ui в автозагрузку"
+  systemd:
+    name: x-ui
+    enabled: yes
+    daemon_reload: yes
+
+# ── Финальная перезагрузка ────────────────────────────────────────────────────
+
+- name: "Финальная перезагрузка (после неё порт {{ ssh_port }})"
+  reboot:
+    msg: "Final reboot after full provisioning"
+    reboot_timeout: 300
+    connect_timeout: 15
+    pre_reboot_delay: 3
+    post_reboot_delay: 20
+    test_command: "systemctl is-active x-ui"
+  vars:
+    ansible_port: "{{ ssh_port }}"
+
+# Все задачи ниже выполняются уже на новом порту ssh_port
+- name: "Проверить статус x-ui"
+  systemd:
+    name: x-ui
+  register: _xui_status
+  vars:
+    ansible_port: "{{ ssh_port }}"
+
+- name: "=== РЕЗУЛЬТАТ ==="
+  debug:
+    msg: |
+      ╔══════════════════════════════════════════════════╗
+      ║   Нода готова к работе                          ║
+      ╠══════════════════════════════════════════════════╣
+      ║  IP:      {{ ansible_host }}
+      ║  SSH:     порт {{ ssh_port }}, root отключён
+      ║  x-ui:    {{ _xui_status.status.ActiveState }}
+      ║  Доступ:  ssh -p {{ ssh_port }} yukh@{{ ansible_host }}
+      ╚══════════════════════════════════════════════════╝
+  vars:
+    ansible_port: "{{ ssh_port }}"

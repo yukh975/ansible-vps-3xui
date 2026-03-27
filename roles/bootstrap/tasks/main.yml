@@ -1,0 +1,7 @@
+---
+# Диспетчер: запускаем нужную фазу в зависимости от bootstrap_phase
+- include_tasks: upgrade.yml
+  when: bootstrap_phase == 'upgrade'
+
+- include_tasks: configure.yml
+  when: bootstrap_phase == 'configure'

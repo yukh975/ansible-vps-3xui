@@ -1,0 +1,30 @@
+# /etc/ssh/sshd_config — управляется Ansible, не редактировать вручную
+
+Port {{ ssh_port }}
+AddressFamily any
+ListenAddress 0.0.0.0
+ListenAddress ::
+
+# Аутентификация
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+
+# Прочее
+UsePAM yes
+X11Forwarding no
+PrintMotd no
+AcceptEnv LANG LC_*
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+# Таймауты
+ClientAliveInterval 120
+ClientAliveCountMax 3
+LoginGraceTime 30
+
+# Защита
+MaxAuthTries 3
+MaxSessions 5
+AllowTcpForwarding no
+AllowAgentForwarding no
