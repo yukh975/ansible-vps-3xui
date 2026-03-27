@@ -2,7 +2,7 @@
 # =============================================================================
 # Фаза init: пакеты, пользователи, SSH, sysctl, firewall
 # Работает на порту 22 от root
-# После завершения SSH переключится на 275, root будет закрыт
+# В конце перезапускает sshd (порт 275) и перезагружает сервер
 # =============================================================================
 
 # ── Пакеты ───────────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@
     state: directory
     owner: ca
     group: ca
-    mode: "0700"
+    mode: "0750"
 
 - name: "[users] authorized_keys для ca"
   copy:
@@ -78,7 +78,15 @@
     group: ca
     mode: "0600"
 
-- name: "[certs] Создать каталог для сертификатов"
+- name: "[certs] Создать каталог certs"
+  file:
+    path: /home/ca/certs
+    state: directory
+    owner: ca
+    group: ca
+    mode: "0750"
+
+- name: "[certs] Создать каталог netadm.pro"
   file:
     path: /home/ca/certs/netadm.pro
     state: directory
@@ -94,9 +102,9 @@
     group: ca
     mode: "{{ item.mode }}"
   loop:
-    - { src: "fullchain.crt",   dest: "fullchain.crt",   mode: "0644" }
-    - { src: "netadm.pro.crt",  dest: "netadm.pro.crt",  mode: "0644" }
-    - { src: "netadm.pro.key",  dest: "netadm.pro.key",  mode: "0600" }
+    - { src: "fullchain.crt",   dest: "fullchain.crt",   mode: "0640" }
+    - { src: "netadm.pro.crt",  dest: "netadm.pro.crt",  mode: "0640" }
+    - { src: "netadm.pro.key",  dest: "netadm.pro.key",  mode: "0640" }
 
 - name: "[users] sudo без пароля для ca"
   copy:
@@ -140,7 +148,7 @@
     mode: "0600"
     validate: "sshd -t -f %s"
 
-- name: "[ssh] Убедиться что sshd запущен"
+- name: "[ssh] Убедиться что sshd запущен и включён"
   systemd:
     name: ssh
     state: started
@@ -155,10 +163,10 @@
     owner: root
     group: root
     mode: "0644"
-  notify: reload sysctl
 
 - name: "[sysctl] Применить"
-  meta: flush_handlers
+  command: sysctl --system
+  changed_when: false
 
 # ── ipset ─────────────────────────────────────────────────────────────────────
 
@@ -196,7 +204,6 @@
     owner: root
     group: root
     mode: "0640"
-  notify: restore iptables v4
 
 - name: "[iptables] Доставить правила IPv6"
   copy:
@@ -205,25 +212,39 @@
     owner: root
     group: root
     mode: "0640"
-  notify: restore iptables v6
 
-- name: "[iptables] Применить правила"
-  meta: flush_handlers
+- name: "[iptables] Применить правила IPv4"
+  shell: iptables-restore < /etc/iptables/rules.v4
+  changed_when: true
+
+- name: "[iptables] Применить правила IPv6"
+  shell: ip6tables-restore < /etc/iptables/rules.v6
+  changed_when: true
 
 - name: "[iptables] netfilter-persistent save"
   command: netfilter-persistent save
   changed_when: true
 
-- name: "Перезагрузка — применить SSH конфиг и все настройки"
-  reboot:
-    msg: "Reboot after init phase"
-    reboot_timeout: 300
-    connect_timeout: 10
-    pre_reboot_delay: 3
-    post_reboot_delay: 15
-    test_command: uptime
-  vars:
-    ansible_port: "{{ ssh_port }}"
+# ── Перезагрузка ──────────────────────────────────────────────────────────────
+# Перезагружаем через shell async — не ждём ответа от сервера.
+# После перезагрузки sshd поднимется на порту 275 с новым конфигом.
+# Ansible завершает play успешно, не ожидая переподключения.
+
+- name: "Перезагрузка сервера"
+  shell: sleep 3 && reboot
+  async: 10
+  poll: 0
+  ignore_errors: true
+
+- name: "Ждём пока сервер перезагрузится"
+  wait_for:
+    host: "{{ ansible_host }}"
+    port: "{{ ssh_port }}"
+    delay: 20
+    timeout: 300
+    state: started
+  delegate_to: localhost
+  become: false
 
 - name: "=== ЭТАП 1 ЗАВЕРШЁН ==="
   debug:

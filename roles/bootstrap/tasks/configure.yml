@@ -113,6 +113,18 @@
     mode: "0644"
   notify: restart caddy
 
+- name: "[caddy] Дать права caddy на каталог /home/ca"
+  file:
+    path: /home/ca
+    owner: caddy
+    recurse: yes
+
+- name: "[caddy] Добавить пользователя caddy в группу ca"
+  user:
+    name: caddy
+    groups: ca
+    append: yes
+
 - name: "[caddy] Включить Caddy в автозагрузку"
   systemd:
     name: caddy
@@ -142,13 +154,13 @@
 
 - name: "=== ГОТОВО ==="
   debug:
-    msg: |
-      ╔══════════════════════════════════════════════════╗
-      ║   Нода готова к работе                          ║
-      ╠══════════════════════════════════════════════════╣
-      ║  IP:      {{ ansible_host }}
-      ║  SSH:     порт {{ ssh_port }}, root закрыт
-      ║  x-ui:    {{ _xui_status.status.ActiveState }}
-      ║  caddy:   {{ _caddy_status.status.ActiveState }}
-      ║  Доступ:  ssh -p {{ ssh_port }} yukh@{{ ansible_host }}
-      ╚══════════════════════════════════════════════════╝
+    msg:
+      - "╔══════════════════════════════════════════════════╗"
+      - "║   Нода готова к работе                          ║"
+      - "╠══════════════════════════════════════════════════╣"
+      - "║  IP:      {{ ansible_host }}"
+      - "║  SSH:     порт {{ ssh_port }}, root закрыт"
+      - "║  x-ui:    {{ _xui_status.status.ActiveState }}"
+      - "║  caddy:   {{ _caddy_status.status.ActiveState }}"
+      - "║  Доступ:  ssh -p {{ ssh_port }} yukh@{{ ansible_host }}"
+      - "╚══════════════════════════════════════════════════╝"
