@@ -37,6 +37,7 @@ xui_db_dest: "/etc/x-ui/x-ui.db"
 
 # ── Пакеты ───────────────────────────────────────────────────────────────────
 extra_packages:
+  - sudo
   - iptables
   - iptables-persistent
   - ipset

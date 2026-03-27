@@ -1,0 +1,202 @@
+---
+# =============================================================================
+# Фаза init: пакеты, пользователи, SSH, sysctl, firewall
+# Работает на порту 22 от root
+# После завершения SSH переключится на 275, root будет закрыт
+# =============================================================================
+
+# ── Пакеты ───────────────────────────────────────────────────────────────────
+
+- name: "[pkg] apt update"
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: "[pkg] Установить необходимые пакеты"
+  apt:
+    name: "{{ extra_packages }}"
+    state: present
+
+# ── Пользователи ─────────────────────────────────────────────────────────────
+
+- name: "[users] Создать пользователя yukh"
+  user:
+    name: yukh
+    groups: "{{ users.yukh.groups | join(',') }}"
+    append: yes
+    shell: "{{ users.yukh.shell }}"
+    password: "{{ users.yukh.password }}"
+    create_home: yes
+    state: present
+
+- name: "[users] Создать ~/.ssh для yukh"
+  file:
+    path: /home/yukh/.ssh
+    state: directory
+    owner: yukh
+    group: yukh
+    mode: "0700"
+
+- name: "[users] authorized_keys для yukh"
+  copy:
+    src: "files/yukh/authorized_keys"
+    dest: /home/yukh/.ssh/authorized_keys
+    owner: yukh
+    group: yukh
+    mode: "0600"
+
+- name: "[users] .bashrc для yukh"
+  copy:
+    src: "files/yukh/.bashrc"
+    dest: /home/yukh/.bashrc
+    owner: yukh
+    group: yukh
+    mode: "0644"
+
+- name: "[users] Создать пользователя ca"
+  user:
+    name: ca
+    groups: ""
+    shell: "{{ users.ca.shell }}"
+    password: "{{ users.ca.password }}"
+    create_home: yes
+    state: present
+
+- name: "[users] Создать ~/.ssh для ca"
+  file:
+    path: /home/ca/.ssh
+    state: directory
+    owner: ca
+    group: ca
+    mode: "0700"
+
+- name: "[users] authorized_keys для ca"
+  copy:
+    src: "files/ca/authorized_keys"
+    dest: /home/ca/.ssh/authorized_keys
+    owner: ca
+    group: ca
+    mode: "0600"
+
+- name: "[users] sudo без пароля для ca"
+  copy:
+    dest: /etc/sudoers.d/ca
+    content: "ca ALL=(ALL) NOPASSWD: ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+
+- name: "[users] Установить пароль root"
+  user:
+    name: root
+    password: "{{ users.root.password }}"
+
+- name: "[users] .bashrc для root"
+  copy:
+    src: "files/root/.bashrc"
+    dest: /root/.bashrc
+    owner: root
+    group: root
+    mode: "0644"
+
+# ── SSH hardening ─────────────────────────────────────────────────────────────
+
+- name: "[ssh] Задеплоить sshd_config"
+  template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "0600"
+    validate: "sshd -t -f %s"
+
+- name: "[ssh] Убедиться что sshd запущен"
+  systemd:
+    name: ssh
+    state: started
+    enabled: yes
+
+# ── sysctl ────────────────────────────────────────────────────────────────────
+
+- name: "[sysctl] Доставить конфиг"
+  copy:
+    src: "{{ sysctl_src }}"
+    dest: "{{ sysctl_dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload sysctl
+
+- name: "[sysctl] Применить"
+  meta: flush_handlers
+
+# ── ipset ─────────────────────────────────────────────────────────────────────
+
+- name: "[ipset] Доставить конфиг"
+  copy:
+    src: "{{ ipset_src }}"
+    dest: "{{ ipset_dest }}"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: "[ipset] Применить"
+  command: ipset restore -f {{ ipset_dest }}
+  ignore_errors: true
+
+- name: "[ipset] Включить netfilter-persistent"
+  systemd:
+    name: netfilter-persistent
+    enabled: yes
+
+# ── iptables ──────────────────────────────────────────────────────────────────
+
+- name: "[iptables] Создать /etc/iptables"
+  file:
+    path: /etc/iptables
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: "[iptables] Доставить правила IPv4"
+  copy:
+    src: "{{ iptables_rules_v4_src }}"
+    dest: "{{ iptables_rules_v4_dest }}"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: restore iptables v4
+
+- name: "[iptables] Доставить правила IPv6"
+  copy:
+    src: "{{ iptables_rules_v6_src }}"
+    dest: "{{ iptables_rules_v6_dest }}"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: restore iptables v6
+
+- name: "[iptables] Применить правила"
+  meta: flush_handlers
+
+- name: "[iptables] netfilter-persistent save"
+  command: netfilter-persistent save
+  changed_when: true
+
+- name: "[ssh] Перезапустить sshd (применить новый конфиг)"
+  systemd:
+    name: ssh
+    state: restarted
+
+- name: "=== ЭТАП 1 ЗАВЕРШЁН ==="
+  debug:
+    msg: |
+      ╔══════════════════════════════════════════════════════════╗
+      ║   Этап 1 завершён                                       ║
+      ╠══════════════════════════════════════════════════════════╣
+      ║  SSH теперь на порту {{ ssh_port }}, root закрыт
+      ║  Следующий шаг:
+      ║    ansible-playbook -i inventory-configure.ini site-configure.yml
+      ╚══════════════════════════════════════════════════════════╝

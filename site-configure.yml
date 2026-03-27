@@ -1,0 +1,19 @@
+---
+# =============================================================================
+# site-configure.yml — ЭТАП 2: запускать на порту 275 от yukh
+# Выполняет: установка 3x-ui, загрузка БД, финальная перезагрузка
+#
+# Запуск:
+#   ansible-playbook -i inventory-configure.ini site-configure.yml
+# =============================================================================
+
+- name: "PLAY 3 :: 3x-ui, финальная перезагрузка"
+  hosts: new_vps
+  become: true
+  gather_facts: true
+  vars:
+    ansible_port: "{{ ssh_port }}"
+  roles:
+    - role: bootstrap
+      vars:
+        bootstrap_phase: configure

@@ -1,0 +1,31 @@
+---
+# =============================================================================
+# site-init.yml — ЭТАП 1: запускать на порту 22 от root
+# Выполняет: обновление ОС, пакеты, пользователи, SSH, sysctl, firewall
+# После завершения SSH переключится на порт 275, root будет закрыт
+#
+# Запуск:
+#   ansible-playbook -i inventory-init.ini site-init.yml
+# =============================================================================
+
+- name: "PLAY 1 :: Обновление ОС и перезагрузка"
+  hosts: new_vps
+  become: true
+  gather_facts: true
+  vars:
+    ansible_port: 22
+  roles:
+    - role: bootstrap
+      vars:
+        bootstrap_phase: upgrade
+
+- name: "PLAY 2 :: Пакеты, пользователи, SSH, sysctl, firewall"
+  hosts: new_vps
+  become: true
+  gather_facts: true
+  vars:
+    ansible_port: 22
+  roles:
+    - role: bootstrap
+      vars:
+        bootstrap_phase: init

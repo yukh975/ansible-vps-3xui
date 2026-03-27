@@ -1,6 +1,6 @@
 # =============================================================================
-# inventory.ini — НЕ КОММИТИТЬ (в .gitignore)
-# Скопировать из inventory.ini.example и заполнить
+# inventory-init.ini — ЭТАП 1 (порт 22, root)
+# Скопировать в inventory-init.ini и заполнить
 # =============================================================================
 
 [new_vps]
@@ -9,7 +9,5 @@ vps1 ansible_host=YOUR_SERVER_IP
 [new_vps:vars]
 ansible_user=root
 ansible_port=22
+ansible_ssh_private_key_file=~/.ssh/id_ed25519
 ansible_ssh_extra_args='-o StrictHostKeyChecking=no'
-
-# Пароль не хранить в файле — передавать при запуске:
-#   ansible-playbook -i inventory.ini site.yml --ask-pass
