@@ -165,6 +165,11 @@
   changed_when: false
   when: ipset_hosts | default([]) | length > 0
 
+- name: "[ipset] Включить ipset-persistent"
+  systemd:
+    name: ipset-persistent
+    enabled: yes
+
 - name: "[ipset] Включить netfilter-persistent"
   systemd:
     name: netfilter-persistent
