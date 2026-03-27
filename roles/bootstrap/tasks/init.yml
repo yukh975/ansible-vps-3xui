@@ -213,6 +213,9 @@
     ip6tables-restore < {{ iptables_rules_v6_dest }}
     netfilter-persistent save
     sleep 3 && reboot
+  async: 30
+  poll: 0
+  ignore_errors: true
   async: 10
   poll: 0
   ignore_errors: true
