@@ -6,4 +6,5 @@
 # - при автообновлении сертификата (Caddy перезапускает себя)
 
 [Service]
-ExecStartPost=/usr/local/bin/cert-sync.sh
+# Префикс '+' запускает скрипт с правами root (нужно для записи в /etc/ssl/)
+ExecStartPost=+/usr/local/bin/cert-sync.sh
