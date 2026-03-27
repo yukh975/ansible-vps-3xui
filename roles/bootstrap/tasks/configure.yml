@@ -1,6 +1,6 @@
 ---
 # =============================================================================
-# Фаза configure: 3x-ui, Caddy, финальная перезагрузка
+# Фаза configure: 3x-ui, Caddy + ACME, cert-sync, финальная перезагрузка
 # Работает на порту {{ ssh_port }} от {{ deploy_user }}
 # =============================================================================
 
@@ -132,6 +132,48 @@
   notify: restart caddy
   when: install_caddy | default(true)
 
+# ── cert-sync ─────────────────────────────────────────────────────────────────
+# cert-sync копирует сертификаты Caddy в certs_dest_dir и перезапускает x-ui.
+# Запускается через ExecStartPost при каждом старте Caddy — в том числе
+# после автообновления сертификата (Caddy перезапускает себя при обновлении).
+
+- name: "[cert-sync] Создать каталог для сертификатов"
+  file:
+    path: "{{ certs_dest_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: install_caddy | default(true)
+
+- name: "[cert-sync] Установить скрипт"
+  template:
+    src: cert-sync.sh.j2
+    dest: /usr/local/bin/cert-sync.sh
+    owner: root
+    group: root
+    mode: "0755"
+  when: install_caddy | default(true)
+
+- name: "[cert-sync] Создать каталог для systemd override"
+  file:
+    path: /etc/systemd/system/caddy.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: install_caddy | default(true)
+
+- name: "[cert-sync] Установить systemd override для Caddy"
+  template:
+    src: caddy-override.conf.j2
+    dest: /etc/systemd/system/caddy.service.d/cert-sync.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload systemd and restart caddy
+  when: install_caddy | default(true)
+
 - name: "[caddy] Включить Caddy в автозагрузку"
   systemd:
     name: caddy
@@ -140,6 +182,8 @@
   when: install_caddy | default(true)
 
 # ── Финальная перезагрузка ────────────────────────────────────────────────────
+# После перезагрузки Caddy стартует, получает сертификат,
+# cert-sync копирует его в certs_dest_dir, x-ui перезапускается.
 
 - name: "Финальная перезагрузка"
   reboot:
@@ -147,8 +191,8 @@
     reboot_timeout: 300
     connect_timeout: 15
     pre_reboot_delay: 3
-    post_reboot_delay: 20
-    test_command: "systemctl is-active x-ui"
+    post_reboot_delay: 30
+    test_command: "systemctl is-active caddy"
 
 - name: "Проверить статус x-ui"
   systemd:
@@ -172,4 +216,5 @@
       - "║  SSH:     порт {{ ssh_port }}, root закрыт"
       - "║  x-ui:    {{ _xui_status.status.ActiveState | default('не установлен') }}"
       - "║  caddy:   {{ _caddy_status.status.ActiveState | default('не установлен') }}"
+      - "║  ACME:    сертификат будет получен при первом старте Caddy"
       - "╚══════════════════════════════════════════════════════════╝"

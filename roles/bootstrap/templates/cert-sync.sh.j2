@@ -1,0 +1,55 @@
+#!/bin/bash
+# /usr/local/bin/cert-sync.sh — управляется Ansible, не редактировать вручную
+#
+# Копирует сертификаты из хранилища Caddy в {{ certs_dest_dir }}
+# и перезапускает x-ui если сертификат изменился.
+#
+# Запускается автоматически при каждом старте Caddy (ExecStartPost),
+# что обеспечивает синхронизацию после автообновления сертификата.
+
+set -euo pipefail
+
+DOMAIN="{{ domain }}"
+CADDY_CERT_DIR="/var/lib/caddy/.local/share/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${DOMAIN}"
+DEST_DIR="{{ certs_dest_dir }}"
+
+# Ждём пока Caddy получит сертификат (актуально при первом запуске)
+WAIT=0
+until [ -f "${CADDY_CERT_DIR}/${DOMAIN}.crt" ]; do
+    if [ "$WAIT" -ge 120 ]; then
+        echo "cert-sync: таймаут ожидания сертификата (${DOMAIN})" >&2
+        exit 1
+    fi
+    sleep 5
+    WAIT=$((WAIT + 5))
+done
+
+mkdir -p "$DEST_DIR"
+chmod 755 "$DEST_DIR"
+
+CHANGED=0
+
+copy_if_changed() {
+    local src="$1"
+    local dst="$2"
+    local mode="$3"
+    if [ -f "$src" ]; then
+        if ! cmp -s "$src" "$dst" 2>/dev/null; then
+            cp "$src" "$dst"
+            chmod "$mode" "$dst"
+            CHANGED=1
+            echo "cert-sync: обновлён $(basename $dst)"
+        fi
+    fi
+}
+
+copy_if_changed "${CADDY_CERT_DIR}/${DOMAIN}.crt" "${DEST_DIR}/${DOMAIN}.crt"   "644"
+copy_if_changed "${CADDY_CERT_DIR}/${DOMAIN}.key" "${DEST_DIR}/${DOMAIN}.key"   "600"
+copy_if_changed "${CADDY_CERT_DIR}/${DOMAIN}.crt" "${DEST_DIR}/fullchain.crt"   "644"
+
+if [ "$CHANGED" = "1" ]; then
+    echo "cert-sync: сертификат изменился, перезапускаем x-ui"
+    systemctl restart x-ui || true
+else
+    echo "cert-sync: сертификат не изменился"
+fi

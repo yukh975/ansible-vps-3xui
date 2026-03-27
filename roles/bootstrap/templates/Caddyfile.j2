@@ -1,12 +1,20 @@
 # /etc/caddy/Caddyfile — управляется Ansible, не редактировать вручную
 # Сгенерировано из templates/Caddyfile.j2
 
-:443 {
-    tls {{ certs.base_dir }}/{{ domain }}.crt {{ certs.base_dir }}/{{ domain }}.key
+{
+    # Email для уведомлений Let's Encrypt об истечении сертификата
+    email {{ acme_email }}
 
+    # Caddy слушает HTTPS на нестандартном порту, чтобы не конфликтовать
+    # с 3x-ui (инбаунды 443). ACME использует HTTP-01 challenge через порт 80.
+    https_port {{ caddy_https_port | default(8443) }}
+}
+
+{{ domain }}:{{ caddy_https_port | default(8443) }} {
     reverse_proxy {{ caddy_redirect_url }}
 }
 
-:80 {
-    redir https://{host}{uri} permanent
+# HTTP → HTTPS редирект на нестандартный порт Caddy
+http://{{ domain }} {
+    redir https://{{ domain }}:{{ caddy_https_port | default(8443) }}{uri} permanent
 }

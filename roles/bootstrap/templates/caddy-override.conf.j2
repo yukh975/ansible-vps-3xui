@@ -1,0 +1,9 @@
+# /etc/systemd/system/caddy.service.d/cert-sync.conf
+# Управляется Ansible, не редактировать вручную
+#
+# Запускает cert-sync после каждого старта Caddy:
+# - при первичном развёртывании (первое получение сертификата)
+# - при автообновлении сертификата (Caddy перезапускает себя)
+
+[Service]
+ExecStartPost=/usr/local/bin/cert-sync.sh

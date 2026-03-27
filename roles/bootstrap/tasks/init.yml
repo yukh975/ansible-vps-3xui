@@ -117,27 +117,6 @@
     mode: "0644"
   when: users.root.has_bashrc | default(false)
 
-# ── Сертификаты ──────────────────────────────────────────────────────────────
-
-- name: "[certs] Создать каталог сертификатов"
-  file:
-    path: "{{ certs.base_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: "[certs] Доставить сертификаты"
-  copy:
-    src: "files/certs/{{ item.src }}"
-    dest: "{{ certs.base_dir }}/{{ item.dest }}"
-    owner: root
-    group: root
-    mode: "{{ item.mode }}"
-  loop: "{{ certs.files }}"
-  loop_control:
-    label: "{{ item.dest }}"
-
 # ── SSH hardening ─────────────────────────────────────────────────────────────
 
 - name: "[ssh] Задеплоить sshd_config"
@@ -263,6 +242,5 @@
       - "╠══════════════════════════════════════════════════════════╣"
       - "║  SSH теперь на порту {{ ssh_port }}, root закрыт                    ║"
       - "║  Следующий шаг:                                          ║"
-      - "║  ansible-playbook -i inventory-configure.ini  \\           ║"
-      - "║                   site-configure.yml                     ║"
+      - "║  ansible-playbook -i inventory.ini site-configure.yml    ║"
       - "╚══════════════════════════════════════════════════════════╝"
