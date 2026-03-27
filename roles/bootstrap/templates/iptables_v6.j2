@@ -17,6 +17,9 @@
 
 # SSH
 -A INPUT -p tcp --dport {{ ssh_port }} -j ACCEPT
+{% if ssh_port | int != 22 %}
+-A INPUT -p tcp --dport 22 -j ACCEPT
+{% endif %}
 
 # Дополнительные TCP-порты
 {% for port in allowed_tcp_ports | default([]) %}
