@@ -59,10 +59,10 @@ It contains inbounds and TLS settings.
 scp root@<REFERENCE_IP>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 ```
 
-> **Important note about `certs_dest_dir`:**
-> The path where cert-sync places certificates **must match** the TLS settings
-> in `x-ui.db` (the TLS section in inbound settings).
-> Default: `/etc/ssl/<hostname>`. If you change it, update it in 3X-UI on the reference server too.
+> **About `certs_dest_dir` and x-ui.db paths:**
+> Ansible automatically updates the certificate paths in `x-ui.db` after copying it —
+> writes `certs_dest_dir/hostname.crt` and `certs_dest_dir/hostname.key` into the database.
+> No changes needed on the reference server.
 
 ---
 
@@ -82,7 +82,7 @@ Open `group_vars/new_vps.yml` and fill in the parameters:
 | `ssh_port` | SSH port after hardening (not 22) |
 | `deploy_user` | Username for stage 2 — **must be listed in `users`** |
 | `acme_email` | Email for Let's Encrypt registration |
-| `certs_dest_dir` | Certificate path — **must match `x-ui.db`!** |
+| `certs_dest_dir` | Path where cert-sync places certificates (auto-updated in x-ui.db) |
 | `users.<name>.password` | SHA-512 password hash |
 | `users.<name>.ssh_public_keys` | List of public SSH keys (at least one) |
 

@@ -127,8 +127,8 @@ acme_email: "admin@example.com"          # email для Let's Encrypt
 certs_dest_dir: "/etc/ssl/{{ hostname }}"  # куда cert-sync кладёт сертификаты
 ```
 
-> Путь `certs_dest_dir` **должен совпадать** с настройками TLS в `x-ui.db`.
-> Если меняете — обновите и в 3X-UI на эталонном сервере.
+> Ansible автоматически обновляет пути к сертификатам в `x-ui.db` после заливки —
+> трогать эталонный сервер не нужно.
 
 ### Caddy
 

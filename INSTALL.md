@@ -59,10 +59,10 @@ cat ~/.ssh/id_ed25519.pub
 scp root@<IP_ЭТАЛОНА>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 ```
 
-> **Важно про `certs_dest_dir`:**
-> Путь, куда cert-sync кладёт сертификаты, **должен совпадать** с настройками TLS
-> в `x-ui.db` (раздел TLS в настройках инбаунда).
-> По умолчанию: `/etc/ssl/<hostname>`. Если меняете — обновите и в 3X-UI на эталоне.
+> **Про `certs_dest_dir` и пути в x-ui.db:**
+> Ansible автоматически обновляет пути к сертификатам в `x-ui.db` после заливки —
+> прописывает туда `certs_dest_dir/hostname.crt` и `certs_dest_dir/hostname.key`.
+> Трогать эталонный сервер не нужно.
 
 ---
 
@@ -82,7 +82,7 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 | `ssh_port` | SSH-порт после hardening (не 22) |
 | `deploy_user` | Имя пользователя для этапа 2 — **должен быть в `users`** |
 | `acme_email` | Email для регистрации в Let's Encrypt |
-| `certs_dest_dir` | Путь к сертификатам — **должен совпадать с `x-ui.db`!** |
+| `certs_dest_dir` | Путь к сертификатам (пути в x-ui.db обновляются автоматически) |
 | `users.<name>.password` | SHA-512 хэш пароля пользователя |
 | `users.<name>.ssh_public_keys` | Список публичных SSH-ключей (минимум один) |
 

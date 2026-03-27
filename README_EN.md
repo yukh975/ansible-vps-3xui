@@ -127,8 +127,8 @@ acme_email: "admin@example.com"          # email for Let's Encrypt
 certs_dest_dir: "/etc/ssl/{{ hostname }}"  # where cert-sync places the certificates
 ```
 
-> The `certs_dest_dir` path **must match** the TLS settings in `x-ui.db`.
-> If you change it, update it in 3X-UI on the reference server as well.
+> Ansible automatically updates the certificate paths in `x-ui.db` after copying it —
+> no changes needed on the reference server.
 
 ### Caddy
 
