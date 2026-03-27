@@ -202,25 +202,17 @@
     group: root
     mode: "0640"
 
-- name: "[iptables] Применить правила IPv4"
-  shell: "iptables-restore < {{ iptables_rules_v4_dest }}"
-  changed_when: true
-
-- name: "[iptables] Применить правила IPv6"
-  shell: "ip6tables-restore < {{ iptables_rules_v6_dest }}"
-  changed_when: true
-
-- name: "[iptables] netfilter-persistent save"
-  command: netfilter-persistent save
-  changed_when: true
-
 # ── Перезагрузка ──────────────────────────────────────────────────────────────
-# Перезагружаем через shell async — не ждём ответа от сервера.
-# После перезагрузки sshd поднимется на новом порту с новым конфигом.
-# Ansible завершает play успешно, не ожидая переподключения.
+# iptables применяется прямо перед reboot — разрыв соединения не важен,
+# т.к. reboot уже запущен асинхронно. После перезагрузки правила
+# подхватывает netfilter-persistent.
 
-- name: "Перезагрузка сервера"
-  shell: sleep 3 && reboot
+- name: "Применить firewall и перезагрузить сервер"
+  shell: |
+    iptables-restore < {{ iptables_rules_v4_dest }}
+    ip6tables-restore < {{ iptables_rules_v6_dest }}
+    netfilter-persistent save
+    sleep 3 && reboot
   async: 10
   poll: 0
   ignore_errors: true
