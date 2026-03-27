@@ -145,8 +145,7 @@
     mode: "0644"
 
 - name: "[sysctl] Применить параметры"
-  command: sysctl -e --system
-  failed_when: false
+  shell: sysctl -e --system || true
   changed_when: true
 
 # ── ipset ─────────────────────────────────────────────────────────────────────
