@@ -202,10 +202,15 @@
     group: root
     mode: "0640"
 
-# ── Перезагрузка ──────────────────────────────────────────────────────────────
+# ── Финальная подготовка и перезагрузка ───────────────────────────────────────
 # iptables применяется прямо перед reboot — разрыв соединения не важен,
 # т.к. reboot уже запущен асинхронно. После перезагрузки правила
 # подхватывает netfilter-persistent.
+
+- name: "[security] Удалить authorized_keys root"
+  file:
+    path: /root/.ssh/authorized_keys
+    state: absent
 
 - name: "Применить firewall и перезагрузить сервер"
   shell: |
@@ -214,9 +219,6 @@
     netfilter-persistent save
     sleep 3 && reboot
   async: 30
-  poll: 0
-  ignore_errors: true
-  async: 10
   poll: 0
   ignore_errors: true
 
