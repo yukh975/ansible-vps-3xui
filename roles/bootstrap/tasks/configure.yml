@@ -1,6 +1,6 @@
 ---
 # =============================================================================
-# Фаза configure: 3x-ui, финальная перезагрузка
+# Фаза configure: 3x-ui, Caddy, финальная перезагрузка
 # Работает на порту 275 от yukh
 # =============================================================================
 
@@ -55,6 +55,70 @@
     enabled: yes
     daemon_reload: yes
 
+# ── Caddy ─────────────────────────────────────────────────────────────────────
+
+- name: "[caddy] Проверить — уже установлен?"
+  stat:
+    path: /usr/bin/caddy
+  register: _caddy_binary
+
+- name: "[caddy] Установить зависимости"
+  apt:
+    name: [debian-keyring, debian-archive-keyring, apt-transport-https, curl]
+    state: present
+  when: not _caddy_binary.stat.exists
+
+- name: "[caddy] Добавить GPG ключ репозитория"
+  shell: |
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+    | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  args:
+    executable: /bin/bash
+    creates: /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  when: not _caddy_binary.stat.exists
+
+- name: "[caddy] Добавить репозиторий"
+  shell: |
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+    | tee /etc/apt/sources.list.d/caddy-stable.list
+  args:
+    executable: /bin/bash
+    creates: /etc/apt/sources.list.d/caddy-stable.list
+  when: not _caddy_binary.stat.exists
+
+- name: "[caddy] apt update"
+  apt:
+    update_cache: yes
+  when: not _caddy_binary.stat.exists
+
+- name: "[caddy] Установить Caddy"
+  apt:
+    name: caddy
+    state: present
+
+- name: "[caddy] Создать /etc/caddy"
+  file:
+    path: /etc/caddy
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: "[caddy] Доставить Caddyfile"
+  copy:
+    src: "files/Caddyfile"
+    dest: /etc/caddy/Caddyfile
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart caddy
+
+- name: "[caddy] Включить Caddy в автозагрузку"
+  systemd:
+    name: caddy
+    enabled: yes
+    daemon_reload: yes
+
 # ── Финальная перезагрузка ────────────────────────────────────────────────────
 
 - name: "Финальная перезагрузка"
@@ -71,6 +135,11 @@
     name: x-ui
   register: _xui_status
 
+- name: "Проверить статус caddy"
+  systemd:
+    name: caddy
+  register: _caddy_status
+
 - name: "=== ГОТОВО ==="
   debug:
     msg: |
@@ -80,5 +149,6 @@
       ║  IP:      {{ ansible_host }}
       ║  SSH:     порт {{ ssh_port }}, root закрыт
       ║  x-ui:    {{ _xui_status.status.ActiveState }}
+      ║  caddy:   {{ _caddy_status.status.ActiveState }}
       ║  Доступ:  ssh -p {{ ssh_port }} yukh@{{ ansible_host }}
       ╚══════════════════════════════════════════════════╝

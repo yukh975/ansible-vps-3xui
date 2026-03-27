@@ -9,9 +9,14 @@
   changed_when: false
 
 - name: restore iptables v4
-  command: iptables-restore < /etc/iptables/rules.v4
+  shell: iptables-restore < /etc/iptables/rules.v4
   changed_when: true
 
 - name: restore iptables v6
-  command: ip6tables-restore < /etc/iptables/rules.v6
+  shell: ip6tables-restore < /etc/iptables/rules.v6
   changed_when: true
+
+- name: restart caddy
+  systemd:
+    name: caddy
+    state: restarted

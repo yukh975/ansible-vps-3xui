@@ -1,4 +1,0 @@
-Положите сюда файл x-ui.db с эталонной машины:
-
-  scp root@<IP_ЭТАЛОНА>:/etc/x-ui/x-ui.db \
-      roles/bootstrap/files/x-ui.db

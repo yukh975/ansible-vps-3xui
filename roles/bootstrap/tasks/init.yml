@@ -78,10 +78,39 @@
     group: ca
     mode: "0600"
 
+- name: "[certs] Создать каталог для сертификатов"
+  file:
+    path: /home/ca/certs/netadm.pro
+    state: directory
+    owner: ca
+    group: ca
+    mode: "0750"
+
+- name: "[certs] Доставить сертификаты"
+  copy:
+    src: "files/certs/{{ item.src }}"
+    dest: "/home/ca/certs/netadm.pro/{{ item.dest }}"
+    owner: ca
+    group: ca
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: "fullchain.crt",   dest: "fullchain.crt",   mode: "0644" }
+    - { src: "netadm.pro.crt",  dest: "netadm.pro.crt",  mode: "0644" }
+    - { src: "netadm.pro.key",  dest: "netadm.pro.key",  mode: "0600" }
+
 - name: "[users] sudo без пароля для ca"
   copy:
     dest: /etc/sudoers.d/ca
     content: "ca ALL=(ALL) NOPASSWD: ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+
+- name: "[users] sudo без пароля для yukh"
+  copy:
+    dest: /etc/sudoers.d/yukh
+    content: "yukh ALL=(ALL) NOPASSWD: ALL\n"
     owner: root
     group: root
     mode: "0440"
@@ -185,10 +214,16 @@
   command: netfilter-persistent save
   changed_when: true
 
-- name: "[ssh] Перезапустить sshd (применить новый конфиг)"
-  systemd:
-    name: ssh
-    state: restarted
+- name: "Перезагрузка — применить SSH конфиг и все настройки"
+  reboot:
+    msg: "Reboot after init phase"
+    reboot_timeout: 300
+    connect_timeout: 10
+    pre_reboot_delay: 3
+    post_reboot_delay: 15
+    test_command: uptime
+  vars:
+    ansible_port: "{{ ssh_port }}"
 
 - name: "=== ЭТАП 1 ЗАВЕРШЁН ==="
   debug:
