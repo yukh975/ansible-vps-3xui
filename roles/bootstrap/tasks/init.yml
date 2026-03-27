@@ -2,7 +2,7 @@
 # =============================================================================
 # Фаза init: пакеты, пользователи, SSH, sysctl, firewall
 # Работает на порту 22 от root
-# В конце перезапускает sshd (порт 275) и перезагружает сервер
+# В конце перезапускает sshd (новый порт) и перезагружает сервер
 # =============================================================================
 
 # ── Hostname ─────────────────────────────────────────────────────────────────
@@ -28,112 +28,80 @@
     name: "{{ extra_packages }}"
     state: present
 
-# ── Пользователи ─────────────────────────────────────────────────────────────
+# ── Пользователи (цикл, кроме root) ─────────────────────────────────────────
 
-- name: "[users] Создать пользователя yukh"
+- name: "[users] Создать пользователя {{ item.key }}"
   user:
-    name: yukh
-    groups: "{{ users.yukh.groups | join(',') }}"
+    name: "{{ item.key }}"
+    groups: "{{ item.value.groups | default([]) | join(',') }}"
     append: yes
-    shell: "{{ users.yukh.shell }}"
-    password: "{{ users.yukh.password }}"
+    shell: "{{ item.value.shell | default('/bin/bash') }}"
+    password: "{{ item.value.password }}"
     create_home: yes
     state: present
+  loop: "{{ users | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: item.key != 'root'
 
-- name: "[users] Создать ~/.ssh для yukh"
+- name: "[users] Создать ~/.ssh для {{ item.key }}"
   file:
-    path: /home/yukh/.ssh
+    path: "/home/{{ item.key }}/.ssh"
     state: directory
-    owner: yukh
-    group: yukh
+    owner: "{{ item.key }}"
+    group: "{{ item.key }}"
     mode: "0700"
+  loop: "{{ users | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - item.key != 'root'
+    - item.value.has_authorized_keys | default(false)
 
-- name: "[users] authorized_keys для yukh"
+- name: "[users] authorized_keys для {{ item.key }}"
   copy:
-    src: "files/yukh/authorized_keys"
-    dest: /home/yukh/.ssh/authorized_keys
-    owner: yukh
-    group: yukh
+    src: "files/{{ item.key }}/authorized_keys"
+    dest: "/home/{{ item.key }}/.ssh/authorized_keys"
+    owner: "{{ item.key }}"
+    group: "{{ item.key }}"
     mode: "0600"
+  loop: "{{ users | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - item.key != 'root'
+    - item.value.has_authorized_keys | default(false)
 
-- name: "[users] .bashrc для yukh"
+- name: "[users] .bashrc для {{ item.key }}"
   copy:
-    src: "files/yukh/.bashrc"
-    dest: /home/yukh/.bashrc
-    owner: yukh
-    group: yukh
+    src: "files/{{ item.key }}/.bashrc"
+    dest: "/home/{{ item.key }}/.bashrc"
+    owner: "{{ item.key }}"
+    group: "{{ item.key }}"
     mode: "0644"
+  loop: "{{ users | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - item.key != 'root'
+    - item.value.has_bashrc | default(false)
 
-- name: "[users] Создать пользователя ca"
-  user:
-    name: ca
-    groups: ""
-    shell: "{{ users.ca.shell }}"
-    password: "{{ users.ca.password }}"
-    create_home: yes
-    state: present
-
-- name: "[users] Создать ~/.ssh для ca"
-  file:
-    path: /home/ca/.ssh
-    state: directory
-    owner: ca
-    group: ca
-    mode: "0750"
-
-- name: "[users] authorized_keys для ca"
+- name: "[users] sudo без пароля для {{ item.key }}"
   copy:
-    src: "files/ca/authorized_keys"
-    dest: /home/ca/.ssh/authorized_keys
-    owner: ca
-    group: ca
-    mode: "0600"
-
-- name: "[certs] Создать каталог certs"
-  file:
-    path: /home/ca/certs
-    state: directory
-    owner: ca
-    group: ca
-    mode: "0750"
-
-- name: "[certs] Создать каталог netadm.pro"
-  file:
-    path: /home/ca/certs/netadm.pro
-    state: directory
-    owner: ca
-    group: ca
-    mode: "0750"
-
-- name: "[certs] Доставить сертификаты"
-  copy:
-    src: "files/certs/{{ item.src }}"
-    dest: "/home/ca/certs/netadm.pro/{{ item.dest }}"
-    owner: ca
-    group: ca
-    mode: "{{ item.mode }}"
-  loop:
-    - { src: "fullchain.crt",   dest: "fullchain.crt",   mode: "0640" }
-    - { src: "netadm.pro.crt",  dest: "netadm.pro.crt",  mode: "0640" }
-    - { src: "netadm.pro.key",  dest: "netadm.pro.key",  mode: "0640" }
-
-- name: "[users] sudo без пароля для ca"
-  copy:
-    dest: /etc/sudoers.d/ca
-    content: "ca ALL=(ALL) NOPASSWD: ALL\n"
+    dest: "/etc/sudoers.d/{{ item.key }}"
+    content: "{{ item.key }} ALL=(ALL) NOPASSWD: ALL\n"
     owner: root
     group: root
     mode: "0440"
     validate: "visudo -cf %s"
+  loop: "{{ users | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - item.key != 'root'
+    - item.value.sudo_nopasswd | default(false)
 
-- name: "[users] sudo без пароля для yukh"
-  copy:
-    dest: /etc/sudoers.d/yukh
-    content: "yukh ALL=(ALL) NOPASSWD: ALL\n"
-    owner: root
-    group: root
-    mode: "0440"
-    validate: "visudo -cf %s"
+# ── Root ─────────────────────────────────────────────────────────────────────
 
 - name: "[users] Установить пароль root"
   user:
@@ -147,6 +115,28 @@
     owner: root
     group: root
     mode: "0644"
+  when: users.root.has_bashrc | default(false)
+
+# ── Сертификаты ──────────────────────────────────────────────────────────────
+
+- name: "[certs] Создать каталог сертификатов"
+  file:
+    path: "{{ certs.base_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: "[certs] Доставить сертификаты"
+  copy:
+    src: "files/certs/{{ item.src }}"
+    dest: "{{ certs.base_dir }}/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop: "{{ certs.files }}"
+  loop_control:
+    label: "{{ item.dest }}"
 
 # ── SSH hardening ─────────────────────────────────────────────────────────────
 
@@ -181,17 +171,26 @@
 
 # ── ipset ─────────────────────────────────────────────────────────────────────
 
-- name: "[ipset] Доставить конфиг"
-  copy:
-    src: "{{ ipset_src }}"
-    dest: "{{ ipset_dest }}"
-    owner: root
-    group: root
-    mode: "0640"
+- name: "[ipset] Создать set {{ ipset_set_name | default('allowed_hosts') }}"
+  command: "ipset create {{ ipset_set_name | default('allowed_hosts') }} hash:ip -exist"
+  changed_when: false
+  when: ipset_hosts | default([]) | length > 0
 
-- name: "[ipset] Применить"
-  command: ipset restore -f {{ ipset_dest }}
-  ignore_errors: true
+- name: "[ipset] Очистить set {{ ipset_set_name | default('allowed_hosts') }}"
+  command: "ipset flush {{ ipset_set_name | default('allowed_hosts') }}"
+  changed_when: false
+  when: ipset_hosts | default([]) | length > 0
+
+- name: "[ipset] Добавить IP в {{ ipset_set_name | default('allowed_hosts') }}"
+  command: "ipset add {{ ipset_set_name | default('allowed_hosts') }} {{ item }} -exist"
+  loop: "{{ ipset_hosts | default([]) }}"
+  changed_when: false
+  when: ipset_hosts | default([]) | length > 0
+
+- name: "[ipset] Сохранить ipset"
+  shell: ipset save > /etc/ipset.conf
+  changed_when: true
+  when: ipset_hosts | default([]) | length > 0
 
 - name: "[ipset] Включить netfilter-persistent"
   systemd:
@@ -238,7 +237,7 @@
 
 # ── Перезагрузка ──────────────────────────────────────────────────────────────
 # Перезагружаем через shell async — не ждём ответа от сервера.
-# После перезагрузки sshd поднимется на порту 275 с новым конфигом.
+# После перезагрузки sshd поднимется на новом порту с новым конфигом.
 # Ansible завершает play успешно, не ожидая переподключения.
 
 - name: "Перезагрузка сервера"
@@ -265,6 +264,6 @@
       - "╠══════════════════════════════════════════════════════════╣"
       - "║  SSH теперь на порту {{ ssh_port }}, root закрыт                    ║"
       - "║  Следующий шаг:                                          ║"
-      - "║  ansible-playbook -i inventory-configure.ini  \           ║"
+      - "║  ansible-playbook -i inventory-configure.ini  \\           ║"
       - "║                   site-configure.yml                     ║"
       - "╚══════════════════════════════════════════════════════════╝"

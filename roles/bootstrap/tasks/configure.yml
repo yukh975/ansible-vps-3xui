@@ -1,7 +1,7 @@
 ---
 # =============================================================================
 # Фаза configure: 3x-ui, Caddy, финальная перезагрузка
-# Работает на порту 275 от yukh
+# Работает на порту {{ ssh_port }} от {{ deploy_user }}
 # =============================================================================
 
 # ── 3x-ui ─────────────────────────────────────────────────────────────────────
@@ -10,6 +10,7 @@
   stat:
     path: /usr/local/x-ui/x-ui
   register: _xui_binary
+  when: install_3xui | default(true)
 
 - name: "[3xui] Установить 3x-ui"
   shell: |
@@ -24,13 +25,16 @@
     executable: /bin/bash
   async: 360
   poll: 15
-  when: not _xui_binary.stat.exists
+  when:
+    - install_3xui | default(true)
+    - not _xui_binary.stat.exists
 
 - name: "[3xui] Остановить x-ui перед заменой БД"
   systemd:
     name: x-ui
     state: stopped
   ignore_errors: true
+  when: install_3xui | default(true)
 
 - name: "[3xui] Создать /etc/x-ui"
   file:
@@ -39,6 +43,7 @@
     owner: root
     group: root
     mode: "0750"
+  when: install_3xui | default(true)
 
 - name: "[3xui] Залить x-ui.db"
   copy:
@@ -48,12 +53,14 @@
     group: root
     mode: "0600"
     backup: yes
+  when: install_3xui | default(true)
 
 - name: "[3xui] Включить x-ui в автозагрузку"
   systemd:
     name: x-ui
     enabled: yes
     daemon_reload: yes
+  when: install_3xui | default(true)
 
 # ── Caddy ─────────────────────────────────────────────────────────────────────
 
@@ -61,12 +68,15 @@
   stat:
     path: /usr/bin/caddy
   register: _caddy_binary
+  when: install_caddy | default(true)
 
 - name: "[caddy] Установить зависимости"
   apt:
     name: [debian-keyring, debian-archive-keyring, apt-transport-https, curl]
     state: present
-  when: not _caddy_binary.stat.exists
+  when:
+    - install_caddy | default(true)
+    - not _caddy_binary.stat.exists
 
 - name: "[caddy] Добавить GPG ключ репозитория"
   shell: |
@@ -75,7 +85,9 @@
   args:
     executable: /bin/bash
     creates: /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  when: not _caddy_binary.stat.exists
+  when:
+    - install_caddy | default(true)
+    - not _caddy_binary.stat.exists
 
 - name: "[caddy] Добавить репозиторий"
   shell: |
@@ -84,17 +96,22 @@
   args:
     executable: /bin/bash
     creates: /etc/apt/sources.list.d/caddy-stable.list
-  when: not _caddy_binary.stat.exists
+  when:
+    - install_caddy | default(true)
+    - not _caddy_binary.stat.exists
 
 - name: "[caddy] apt update"
   apt:
     update_cache: yes
-  when: not _caddy_binary.stat.exists
+  when:
+    - install_caddy | default(true)
+    - not _caddy_binary.stat.exists
 
 - name: "[caddy] Установить Caddy"
   apt:
     name: caddy
     state: present
+  when: install_caddy | default(true)
 
 - name: "[caddy] Создать /etc/caddy"
   file:
@@ -103,6 +120,7 @@
     owner: root
     group: root
     mode: "0755"
+  when: install_caddy | default(true)
 
 - name: "[caddy] Доставить Caddyfile"
   copy:
@@ -112,24 +130,14 @@
     group: root
     mode: "0644"
   notify: restart caddy
-
-- name: "[caddy] Дать права caddy на каталог /home/ca"
-  file:
-    path: /home/ca
-    owner: caddy
-    recurse: yes
-
-- name: "[caddy] Добавить пользователя caddy в группу ca"
-  user:
-    name: caddy
-    groups: ca
-    append: yes
+  when: install_caddy | default(true)
 
 - name: "[caddy] Включить Caddy в автозагрузку"
   systemd:
     name: caddy
     enabled: yes
     daemon_reload: yes
+  when: install_caddy | default(true)
 
 # ── Финальная перезагрузка ────────────────────────────────────────────────────
 
@@ -146,20 +154,22 @@
   systemd:
     name: x-ui
   register: _xui_status
+  when: install_3xui | default(true)
 
 - name: "Проверить статус caddy"
   systemd:
     name: caddy
   register: _caddy_status
+  when: install_caddy | default(true)
 
 - name: "=== ГОТОВО ==="
   debug:
     msg:
-      - "╔══════════════════════════════════════════════════╗"
-      - "║   Нода готова к работе                           ║"
-      - "╠══════════════════════════════════════════════════╣"
-      - "║  IP:      {{ ansible_host }}                         ║"
-      - "║  SSH:     порт {{ ssh_port }}, root закрыт                  ║"
-      - "║  x-ui:    {{ _xui_status.status.ActiveState }}                                 ║"
-      - "║  caddy:   {{ _caddy_status.status.ActiveState }}                                 ║"
-      - "╚══════════════════════════════════════════════════╝"
+      - "╔══════════════════════════════════════════════════════════╗"
+      - "║   Нода готова к работе                                   ║"
+      - "╠══════════════════════════════════════════════════════════╣"
+      - "║  IP:      {{ ansible_host }}"
+      - "║  SSH:     порт {{ ssh_port }}, root закрыт"
+      - "║  x-ui:    {{ _xui_status.status.ActiveState | default('не установлен') }}"
+      - "║  caddy:   {{ _caddy_status.status.ActiveState | default('не установлен') }}"
+      - "╚══════════════════════════════════════════════════════════╝"

@@ -1,0 +1,14 @@
+# =============================================================================
+# inventory.ini — список серверов
+# Скопировать в inventory.ini и заполнить
+# =============================================================================
+#
+# Порт и пользователь для каждого этапа задаются в site-init.yml / site-configure.yml,
+# поэтому inventory содержит только адреса серверов и ключ SSH.
+
+[new_vps]
+vps1 ansible_host=YOUR_SERVER_IP
+
+[new_vps:vars]
+ansible_ssh_private_key_file=~/.ssh/id_ed25519
+ansible_ssh_extra_args='-o StrictHostKeyChecking=no'

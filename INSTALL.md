@@ -1,152 +1,239 @@
-# Инструкция по развёртыванию нового сервера
+# Инструкция по развёртыванию
 
-> Все команды выполняются из каталога `~/ansible-vps`
+> Все команды выполняются из корня проекта (`~/ansible-vps` или где он у вас)
 
 ---
 
-## Первоначальная настройка (один раз)
+## Часть A. Первоначальная настройка (один раз)
 
-### 1. Распаковать архив
+Эти шаги выполняются однократно при первой установке проекта.
+При развёртывании новых серверов переходите сразу к [Части B](#часть-b-развёртывание-нового-сервера).
 
+---
+
+### A1. Установить Ansible
+
+**macOS:**
 ```bash
-tar -xzf ansible-vps.tar.gz
-cd ~/ansible-vps
+brew install ansible
 ```
 
-### 2. Создать каталоги для файлов
-
+**Debian/Ubuntu:**
 ```bash
-mkdir -p roles/bootstrap/files/yukh
-mkdir -p roles/bootstrap/files/ca
-mkdir -p roles/bootstrap/files/root
-mkdir -p roles/bootstrap/files/certs
+sudo apt install ansible
 ```
 
-### 3. Сгенерировать ключ Ansible (если нет)
+Проверить:
+```bash
+ansible --version
+```
+
+---
+
+### A2. Сгенерировать SSH-ключ Ansible (если нет)
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C "ansible-control"
 ```
 
-### 4. Скопировать все файлы с эталонного сервера
+---
+
+### A3. Создать каталоги для файлов с эталонного сервера
+
+Для каждого пользователя, описанного в конфиге, нужен свой каталог:
 
 ```bash
-ETALON=root@<IP_ЭТАЛОНА>
-
-# SSH ключи пользователей
-scp $ETALON:/home/yukh/.ssh/authorized_keys roles/bootstrap/files/yukh/authorized_keys
-scp $ETALON:/home/ca/.ssh/authorized_keys   roles/bootstrap/files/ca/authorized_keys
-
-# Добавить ключ Ansible к пользователю yukh
-cat ~/.ssh/id_ed25519.pub >> roles/bootstrap/files/yukh/authorized_keys
-
-# .bashrc пользователей
-scp $ETALON:/home/yukh/.bashrc roles/bootstrap/files/yukh/.bashrc
-scp $ETALON:/root/.bashrc      roles/bootstrap/files/root/.bashrc
-
-# Конфиги системы
-scp $ETALON:/etc/sysctl.d/99-custom.conf   roles/bootstrap/files/sysctl.conf
-ssh $ETALON "iptables-save"   > roles/bootstrap/files/rules.v4
-ssh $ETALON "ip6tables-save"  > roles/bootstrap/files/rules.v6
-ssh $ETALON "ipset save"      > roles/bootstrap/files/ipset.conf
-
-# 3x-ui база данных
-scp $ETALON:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
-
-# Caddy конфиг
-scp $ETALON:/etc/caddy/Caddyfile roles/bootstrap/files/Caddyfile
-
-# Сертификаты
-scp $ETALON:/home/ca/certs/netadm.pro/fullchain.crt  roles/bootstrap/files/certs/fullchain.crt
-scp $ETALON:/home/ca/certs/netadm.pro/netadm.pro.crt roles/bootstrap/files/certs/netadm.pro.crt
-scp $ETALON:/home/ca/certs/netadm.pro/netadm.pro.key roles/bootstrap/files/certs/netadm.pro.key
+mkdir -p roles/bootstrap/files/{USER1,USER2,root,certs}
 ```
 
-### 5. Прописать пароли в group_vars/new_vps.yml
-
-Сгенерировать хэши:
+Пример для пользователей `yukh` и `ca`:
 ```bash
-openssl passwd -6 'пароль_yukh'
-openssl passwd -6 'пароль_ca'
-openssl passwd -6 'пароль_root'
+mkdir -p roles/bootstrap/files/{yukh,ca,root,certs}
 ```
-
-Вставить результаты в `group_vars/new_vps.yml`:
-```yaml
-users:
-  yukh:
-    password: "$6$..."
-  ca:
-    password: "$6$..."
-  root:
-    password: "$6$..."
-```
-
-> После этого проект готов к использованию. При развёртывании новых серверов
-> шаги 1-5 не повторяются — файлы уже на месте.
 
 ---
 
-## Развёртывание нового сервера
+### A4. Скопировать файлы с эталонного сервера
 
-### 6. Залить SSH ключ Ansible на новый сервер
+Подставьте IP эталона, имена пользователей и домен:
+
+```bash
+ETALON=root@<IP_ЭТАЛОНА>
+DEPLOY_USER=<имя_deploy_user>     # например: yukh
+CERT_USER=<имя_cert_user>         # например: ca (если есть)
+DOMAIN=<ваш_домен>                # например: example.com
+```
+
+**SSH-ключи пользователей:**
+```bash
+scp $ETALON:/home/$DEPLOY_USER/.ssh/authorized_keys \
+    roles/bootstrap/files/$DEPLOY_USER/authorized_keys
+
+scp $ETALON:/home/$CERT_USER/.ssh/authorized_keys \
+    roles/bootstrap/files/$CERT_USER/authorized_keys
+```
+
+**Добавить ключ Ansible к deploy_user:**
+```bash
+cat ~/.ssh/id_ed25519.pub >> roles/bootstrap/files/$DEPLOY_USER/authorized_keys
+```
+
+**Настройки оболочки (для пользователей с `has_bashrc: true`):**
+```bash
+scp $ETALON:/home/$DEPLOY_USER/.bashrc roles/bootstrap/files/$DEPLOY_USER/.bashrc
+scp $ETALON:/root/.bashrc              roles/bootstrap/files/root/.bashrc
+```
+
+**Системные конфиги:**
+```bash
+scp $ETALON:/etc/sysctl.d/99-custom.conf   roles/bootstrap/files/sysctl.conf
+ssh $ETALON "iptables-save"   > roles/bootstrap/files/rules.v4
+ssh $ETALON "ip6tables-save"  > roles/bootstrap/files/rules.v6
+# ipset — адреса задаются в group_vars/new_vps.yml (ipset_friends), файл не нужен
+```
+
+**3x-ui база данных:**
+```bash
+scp $ETALON:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
+```
+
+**Caddy конфиг:**
+```bash
+scp $ETALON:/etc/caddy/Caddyfile roles/bootstrap/files/Caddyfile
+```
+
+**TLS-сертификаты:**
+```bash
+scp $ETALON:/etc/ssl/$DOMAIN/fullchain.crt   roles/bootstrap/files/certs/fullchain.crt
+scp $ETALON:/etc/ssl/$DOMAIN/$DOMAIN.crt     roles/bootstrap/files/certs/$DOMAIN.crt
+scp $ETALON:/etc/ssl/$DOMAIN/$DOMAIN.key     roles/bootstrap/files/certs/$DOMAIN.key
+```
+
+> **Важно о сертификатах:**
+> Пути к сертификатам на целевом сервере задаются через `certs.base_dir` в конфиге
+> и **должны совпадать** с настройками в `x-ui.db` на эталонном сервере.
+> Если меняете пути здесь — обновите и настройки в 3X-UI на эталоне.
+
+---
+
+### A5. Настроить переменные
+
+```bash
+cp group_vars/new_vps.yml.example group_vars/new_vps.yml
+```
+
+Отредактировать `group_vars/new_vps.yml`:
+
+| Что заполнить | Пример |
+|---|---|
+| `hostname` | `vps1.example.com` |
+| `domain` | `example.com` |
+| `ssh_port` | `275` |
+| `deploy_user` | `yukh` |
+| `users.*.password` | Хэш SHA-512 (см. ниже) |
+
+**Сгенерировать хэши паролей:**
+```bash
+openssl passwd -6 'ВАШ_ПАРОЛЬ'
+```
+
+Вставить результат в поле `password` каждого пользователя.
+
+**Рекомендация — зашифровать файл:**
+```bash
+ansible-vault encrypt group_vars/new_vps.yml
+```
+При запуске playbook добавлять `--ask-vault-pass`.
+
+---
+
+> **Готово.** Файлы на месте, переменные заполнены.
+> При развёртывании новых серверов часть A не повторяется.
+
+---
+
+## Часть B. Развёртывание нового сервера
+
+---
+
+### B1. Залить SSH-ключ Ansible на новый сервер
 
 ```bash
 ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<IP_НОВОГО_СЕРВЕРА>
 ```
 
-### 7. Создать inventory файлы
+---
+
+### B2. Создать inventory файл
 
 ```bash
-cp inventory-init.ini.example inventory-init.ini
-cp inventory-configure.ini.example inventory-configure.ini
+cp inventory.ini.example inventory.ini
 ```
 
-Вписать IP нового сервера в оба файла.
-
-### 8. Запустить этап 1 (порт 22, root)
-
-```bash
-ansible-playbook -i inventory-init.ini site-init.yml
-```
-
-Выполняет:
-- apt full-upgrade + перезагрузка
-- установка пакетов
-- создание пользователей yukh и ca
-- копирование сертификатов
-- настройка SSH (порт 275, root закрыт, только ключи)
-- применение sysctl, iptables, ipset
-- перезагрузка
-
-### 9. Запустить этап 2 (порт 275, yukh)
-
-```bash
-ansible-playbook -i inventory-configure.ini site-configure.yml
-```
-
-Выполняет:
-- установка 3x-ui + загрузка x-ui.db
-- установка Caddy + Caddyfile
-- финальная перезагрузка
+Вписать IP нового сервера. Один файл используется для обоих этапов — порт и пользователь для каждого этапа задаются автоматически в playbook.
 
 ---
 
-## Готово
+### B3. Запустить этап 1 (порт 22, root)
 
 ```bash
-ssh -p 275 yukh@<IP>
-ssh -p 275 yukh@<IP> "sudo systemctl status x-ui caddy"
+ansible-playbook -i inventory.ini site-init.yml
+```
+
+> Если используете vault: `ansible-playbook -i inventory.ini site-init.yml --ask-vault-pass`
+
+Что происходит:
+1. `apt full-upgrade` + перезагрузка (если были обновления)
+2. Установка пакетов из списка `extra_packages`
+3. Создание всех пользователей из `users` (кроме root)
+4. Установка hostname
+5. Копирование SSH-ключей, .bashrc, настройка sudoers
+6. Копирование TLS-сертификатов в `/etc/ssl/<домен>/`
+7. Деплой sshd_config (кастомный порт, root закрыт, только ключи)
+8. Применение sysctl, ipset, iptables
+9. Перезагрузка → SSH теперь на кастомном порту, root закрыт
+
+---
+
+### B4. Запустить этап 2 (кастомный порт, deploy_user)
+
+```bash
+ansible-playbook -i inventory.ini site-configure.yml
+```
+
+Что происходит:
+1. Установка 3x-ui (если ещё не установлен)
+2. Загрузка `x-ui.db` с эталонного сервера
+3. Установка Caddy + деплой Caddyfile
+4. Финальная перезагрузка
+5. Проверка статуса x-ui и caddy
+
+---
+
+## Проверка
+
+```bash
+# Подключиться к серверу
+ssh -p <ssh_port> <deploy_user>@<IP>
+
+# Проверить сервисы
+ssh -p <ssh_port> <deploy_user>@<IP> "sudo systemctl status x-ui caddy"
 ```
 
 ---
 
-## Повторный запуск (обновление конфигурации)
+## Повторный запуск
+
+Playbook идемпотентен — можно запускать повторно для обновления конфигурации:
 
 ```bash
-# Этап 1 — пакеты, пользователи, сертификаты, firewall
-ansible-playbook -i inventory-init.ini site-init.yml
+# Этап 1 — обновление ОС, пакеты, пользователи, сертификаты, firewall
+ansible-playbook -i inventory.ini site-init.yml
 
 # Этап 2 — 3x-ui, Caddy
-ansible-playbook -i inventory-configure.ini site-configure.yml
+ansible-playbook -i inventory.ini site-configure.yml
 ```
+
+> **Примечание:** при повторном запуске этапа 1 на уже настроенном сервере
+> он попытается подключиться на порт 22 от root. Если SSH уже на кастомном порту,
+> этап 1 не сможет подключиться — это нормально, используйте только этап 2.

@@ -1,3 +1,10 @@
 # Ansible
 *.retry
 .ansible/
+
+# Inventory с реальными IP (шаблон *.example коммитится)
+inventory.ini
+
+# Секреты и файлы с сервера (ключи, сертификаты, БД, пароли)
+roles/bootstrap/files/
+group_vars/new_vps.yml
