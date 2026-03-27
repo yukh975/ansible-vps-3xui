@@ -54,6 +54,18 @@
     label: "{{ item.0.key }}"
 
 
+- name: "[users] Скопировать .bashrc для {{ item.key }}"
+  copy:
+    src: "files/{{ item.key }}/.bashrc"
+    dest: "{{ '/root/.bashrc' if item.key == 'root' else '/home/' + item.key + '/.bashrc' }}"
+    owner: "{{ item.key }}"
+    group: "{{ item.key if item.key != 'root' else 'root' }}"
+    mode: "0644"
+  loop: "{{ users | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: item.value.has_bashrc | default(false)
+
 - name: "[users] sudo без пароля для {{ item.key }}"
   copy:
     dest: "/etc/sudoers.d/{{ item.key }}"
