@@ -1,24 +1,24 @@
 # Инструкция по развёртыванию
 
 ```
-Часть A  — один раз, при первой установке проекта
-Часть B  — для каждого нового сервера
+Шаг 1  — один раз, при первой установке проекта
+Шаг 2  — для каждого нового сервера
 ```
 
 ---
 
-## Часть A. Первоначальная настройка (один раз)
+## Шаг 1. Первоначальная настройка (один раз)
 
-### A1. Клонировать репозиторий
+### 1. Клонировать репозиторий
 
 ```bash
-git clone https://github.com/yukh975/ansible-newvps-3xui.git ansible-vps
+git clone https://github.com/yukh975/ansible-vps-3xui.git ansible-vps
 cd ansible-vps
 ```
 
 ---
 
-### A2. Установить Ansible
+### 2. Установить Ansible
 
 **macOS:**
 ```bash
@@ -37,7 +37,7 @@ ansible --version
 
 ---
 
-### A3. Сгенерировать SSH-ключ (если нет)
+### 3. Сгенерировать SSH-ключ (если нет)
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C "ansible"
@@ -50,7 +50,7 @@ cat ~/.ssh/id_ed25519.pub
 
 ---
 
-### A4. Скопировать x-ui.db с эталонного сервера
+### 4. Скопировать x-ui.db с эталонного сервера
 
 Это **единственный файл**, который берётся с эталонного сервера.
 В нём хранятся инбаунды и настройки TLS.
@@ -67,15 +67,15 @@ scp root@<IP_ЭТАЛОНА>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 
 ---
 
-### A5. Создать файл переменных
+### 5. Создать файл переменных
 
 ```bash
 cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 ```
 
-Открыть `group_vars/new_vps.yml` и заполнить все параметры:
+Открыть `group_vars/new_vps.yml` и заполнить параметры:
 
-#### Обязательные параметры
+#### Обязательные
 
 | Параметр | Описание |
 |---|---|
@@ -88,7 +88,7 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 | `users.<name>.password` | SHA-512 хэш пароля пользователя |
 | `users.<name>.ssh_public_keys` | Список публичных SSH-ключей (минимум один) |
 
-#### Дополнительные параметры пользователей
+#### Параметры пользователей (опционально)
 
 | Параметр | По умолчанию | Описание |
 |---|---|---|
@@ -96,7 +96,7 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 | `users.<name>.sudo_nopasswd` | `false` | NOPASSWD в sudoers |
 | `users.<name>.has_bashrc` | `false` | Копировать `.bashrc` из `files/<name>/.bashrc` |
 
-#### Параметры сервисов
+#### Сервисы (опционально)
 
 | Параметр | По умолчанию | Описание |
 |---|---|---|
@@ -106,7 +106,7 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 | `install_caddy` | `true` | Устанавливать Caddy |
 | `xui_version` | `""` (latest) | Версия 3x-ui, например `2.3.11` |
 
-#### Параметры firewall
+#### Firewall (опционально)
 
 | Параметр | По умолчанию | Описание |
 |---|---|---|
@@ -138,7 +138,6 @@ openssl passwd -6 'ВАШ_ПАРОЛЬ'
 
 **`.bashrc`** — если нужны алиасы и кастомный промпт:
 ```bash
-# Создать файл для нужного пользователя
 mkdir -p roles/bootstrap/files/myuser/
 nano roles/bootstrap/files/myuser/.bashrc
 ```
@@ -146,7 +145,7 @@ nano roles/bootstrap/files/myuser/.bashrc
 
 ---
 
-### A6. (Опционально) Зашифровать конфиг через ansible-vault
+### 6. (Опционально) Зашифровать конфиг через ansible-vault
 
 ```bash
 ansible-vault encrypt group_vars/new_vps.yml
@@ -159,13 +158,13 @@ ansible-playbook ... --ask-vault-pass
 
 ---
 
-> ✅ **Часть A выполнена.** При развёртывании следующих серверов начинайте с Части B.
+> ✅ **Шаг 1 выполнен.** При развёртывании следующих серверов начинайте с Шага 2.
 
 ---
 
-## Часть B. Развёртывание нового сервера
+## Шаг 2. Развёртывание нового сервера
 
-### B1. Убедиться что DNS настроен
+### 1. Убедиться что DNS настроен
 
 Домен из конфига должен указывать на IP нового сервера.
 Caddy получает TLS-сертификат через HTTP-01 challenge — для этого нужен рабочий DNS.
@@ -177,7 +176,7 @@ dig +short example.com
 
 ---
 
-### B2. Залить SSH-ключ на сервер
+### 2. Залить SSH-ключ на сервер
 
 ```bash
 ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<IP>
@@ -185,7 +184,7 @@ ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<IP>
 
 ---
 
-### B3. Создать inventory
+### 3. Создать inventory
 
 ```bash
 cp inventory.ini.example inventory.ini
@@ -195,7 +194,7 @@ cp inventory.ini.example inventory.ini
 
 ---
 
-### B4. Этап 1 — базовая настройка (порт 22, root)
+### 4. Запустить этап 1 (порт 22, root)
 
 ```bash
 ansible-playbook -i inventory.ini site-init.yml
@@ -216,7 +215,7 @@ ansible-playbook -i inventory.ini site-init.yml --ask-vault-pass
 
 ---
 
-### B5. Этап 2 — установка сервисов (ssh_port, deploy_user)
+### 5. Запустить этап 2 (ssh_port, deploy_user)
 
 ```bash
 ansible-playbook -i inventory.ini site-configure.yml
@@ -239,7 +238,7 @@ ansible-playbook -i inventory.ini site-configure.yml --ask-vault-pass
 
 ---
 
-### B6. Проверка
+### 6. Проверить результат
 
 ```bash
 # Подключиться к серверу
