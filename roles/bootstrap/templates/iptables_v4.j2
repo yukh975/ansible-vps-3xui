@@ -15,10 +15,8 @@
 # ICMP
 -A INPUT -p icmp --icmp-type echo-request -j ACCEPT
 
-# ipset: полный доступ для доверенных хостов
-{% if ipset_hosts | default([]) | length > 0 %}
+# ipset: полный доступ для доверенных хостов (set всегда существует, может быть пустым)
 -A INPUT -m set --match-set {{ ipset_set_name | default('allowed_hosts') }} src -j ACCEPT
-{% endif %}
 
 # SSH
 -A INPUT -p tcp --dport {{ ssh_port }} -j ACCEPT
