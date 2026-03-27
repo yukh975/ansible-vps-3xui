@@ -100,7 +100,8 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 | Параметр | По умолчанию | Описание |
 |---|---|---|
 | `caddy_https_port` | `8443` | HTTPS-порт Caddy |
-| `caddy_redirect_url` | `127.0.0.1:2053` | Куда Caddy проксирует запросы |
+| `caddy_listen_port` | `4443` | Порт, на который x-ray отправляет fallback-трафик |
+| `caddy_fallback_url` | — | Внешний сайт-камуфляж, куда Caddy редиректит трафик |
 | `install_3xui` | `true` | Устанавливать 3x-ui |
 | `install_caddy` | `true` | Устанавливать Caddy |
 | `xui_version` | `""` (latest) | Версия 3x-ui, например `2.3.11` |

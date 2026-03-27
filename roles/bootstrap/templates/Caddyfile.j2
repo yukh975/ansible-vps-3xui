@@ -4,17 +4,15 @@
 {
     # Email для уведомлений Let's Encrypt об истечении сертификата
     email {{ acme_email }}
-
-    # Caddy слушает HTTPS на нестандартном порту, чтобы не конфликтовать
-    # с 3x-ui (инбаунды 443). ACME использует HTTP-01 challenge через порт 80.
-    https_port {{ caddy_https_port | default(8443) }}
 }
 
-{{ domain }}:{{ caddy_https_port | default(8443) }} {
-    reverse_proxy {{ caddy_redirect_url }}
+# ACME: Caddy получает сертификат для домена через HTTP-01 challenge (порт 80).
+# Сертификат затем синхронизируется в certs_dest_dir для использования x-ray.
+{{ domain }} {
+    redir {{ caddy_fallback_url }}{uri} permanent
 }
 
-# HTTP → HTTPS редирект на нестандартный порт Caddy
-http://{{ domain }} {
-    redir https://{{ domain }}:{{ caddy_https_port | default(8443) }}{uri} permanent
+# Fallback-трафик от x-ray (не-VPN) — редирект на сайт-камуфляж
+http://127.0.0.1:{{ caddy_listen_port | default(4443) }} {
+    redir {{ caddy_fallback_url }}{uri} permanent
 }
