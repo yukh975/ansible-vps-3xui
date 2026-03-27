@@ -6,6 +6,36 @@
 
 ---
 
+## [0.8.0] — 2026-03-27
+
+### Тестирование на чистой VM, исправление критических ошибок
+
+### Исправлено
+
+- **`configure.yml`** — убран `test_command: systemctl is-active caddy` из задачи финальной перезагрузки. При `install_caddy: false` или медленном ACME команда всегда завершалась ошибкой, Ansible висел 5 минут до таймаута.
+- **`init.yml`** — применение iptables, сохранение netfilter-persistent и перезагрузка объединены в один `async: 30, poll: 0` shell-скрипт. Раньше применение правил разрывало SSH-соединение до того как Ansible успевал выполнить следующие задачи.
+- **`init.yml`** — удаление `authorized_keys` root перенесено в тот же финальный async-скрипт, иначе задача выполнялась после разрыва соединения и падала с ошибкой.
+- **`init.yml`** — убраны `{{ item.key }}` из имён задач (вызывало предупреждение `'item' is undefined`). Отображение имени пользователя перенесено в `loop_control.label`.
+- **`init.yml`** — копирование `.bashrc` пропускается если файл не существует (`lookup('fileglob', ...)`), вместо ошибки.
+- **`ansible.cfg`** — добавлен `bin_ansible_callbacks = True` для корректной работы счётчика задач `community.general.counter_enabled`.
+- **`group_vars/new_vps.yml.example`** — убран лишний знак `=` в значениях BBR (`net.core.default_qdisc: = fq` → `net.core.default_qdisc: fq`).
+
+### Добавлено
+
+- **`configure.yml`** — задача `[3xui] Обновить пути к сертификатам в БД`: после заливки `x-ui.db` автоматически обновляет `webCertFile` и `webKeyFile` через `sqlite3`, используя переменные `certs_dest_dir` и `domain`. Устраняет необходимость вручную менять пути в x-ui.db на эталонном сервере при смене домена.
+- **`configure.yml`** — рекомендация удалить `deploy_user` после завершения настройки отображается в финальном сообщении.
+- **`INSTALL.md`** — шаг 2.7 «Удалить технического пользователя» с командой `userdel -r`.
+- **`README.md`** — примечание об удалении `deploy_user` после этапа 2.
+- **`init.yml`** — загрузка модуля `tcp_bbr` (`modprobe`) и постоянная активация через `/etc/modules-load.d/tcp_bbr.conf`.
+- **`templates/sysctl.conf.j2`** — шаблон для `/etc/sysctl.d/99-custom.conf`, заменяет модуль `ansible.posix.sysctl`.
+- **`.gitkeep`** — файл-заглушка в `roles/bootstrap/files/` чтобы каталог существовал после `git clone`.
+
+### Удалено
+
+- **`requirements.yml`** — убран вместе с зависимостью от коллекции `ansible.posix`. Все модули заменены на `ansible.builtin`: `authorized_key` → `copy`, `sysctl` → `template + command`.
+
+---
+
 ## [0.7.0] — 2026-03-27
 
 ### INSTALL.md — полная переработка
