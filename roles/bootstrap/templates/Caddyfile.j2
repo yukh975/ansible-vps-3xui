@@ -4,6 +4,9 @@
 {
     # Email для уведомлений Let's Encrypt об истечении сертификата
     email {{ acme_email }}
+    # Caddy не должен занимать порт 443 — он используется x-ray
+    # ACME сертификат получается через HTTP-01 challenge на порту 80
+    https_port 8443
 }
 
 # ACME: Caddy получает сертификат для хоста через HTTP-01 challenge (порт 80).
