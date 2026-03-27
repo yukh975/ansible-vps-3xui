@@ -171,9 +171,7 @@
     enabled: yes
     daemon_reload: yes
 
-# ── Финальная перезагрузка ────────────────────────────────────────────────────
-# После перезагрузки Caddy стартует, получает сертификат,
-# cert-sync копирует его в certs_dest_dir, x-ui перезапускается.
+# ── Финальная перезагрузка и ожидание готовности ─────────────────────────────
 
 - name: "Финальная перезагрузка"
   reboot:
@@ -182,6 +180,30 @@
     connect_timeout: 15
     pre_reboot_delay: 3
     post_reboot_delay: 30
+
+# Останавливаем x-ui — он мог стартовать раньше чем Caddy получил сертификат
+- name: "Остановить x-ui до получения сертификата"
+  systemd:
+    name: x-ui
+    state: stopped
+  ignore_errors: true
+  when: install_3xui | default(true)
+
+# Ждём пока Caddy получит сертификат через ACME (до 5 минут)
+- name: "Ждём сертификат от Caddy (ACME)"
+  wait_for:
+    path: "/var/lib/caddy/.local/share/caddy/certificates/acme-v02.api.letsencrypt.org-directory/{{ hostname }}/{{ hostname }}.crt"
+    timeout: 300
+
+# Синхронизируем сертификаты в certs_dest_dir и запускаем x-ui
+- name: "Запустить cert-sync"
+  command: /usr/local/bin/cert-sync.sh
+
+- name: "Запустить x-ui"
+  systemd:
+    name: x-ui
+    state: started
+  when: install_3xui | default(true)
 
 - name: "Проверить статус x-ui"
   systemd:
@@ -204,7 +226,7 @@
       - "║  SSH:     порт {{ ssh_port }}, root закрыт"
       - "║  x-ui:    {{ _xui_status.status.ActiveState | default('не установлен') }}"
       - "║  caddy:   {{ _caddy_status.status.ActiveState }}"
-      - "║  ACME:    сертификат будет получен при первом старте Caddy"
+      - "║  TLS:     сертификат получен и синхронизирован"
       - "╠══════════════════════════════════════════════════════════╣"
       - "║  Если Ansible больше не нужен — удалите технического     ║"
       - "║  пользователя:                                           ║"
