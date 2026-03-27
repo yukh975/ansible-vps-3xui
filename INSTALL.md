@@ -1,15 +1,15 @@
 # Инструкция по развёртыванию
 
-> Все команды выполняются из корня проекта (`~/ansible-vps` или где он у вас)
+## Общая схема
+
+```
+Часть A  — один раз, при первой установке проекта
+Часть B  — для каждого нового сервера
+```
 
 ---
 
 ## Часть A. Первоначальная настройка (один раз)
-
-Эти шаги выполняются однократно при первой установке проекта.
-При развёртывании новых серверов переходите сразу к [Части B](#часть-b-развёртывание-нового-сервера).
-
----
 
 ### A1. Установить Ansible
 
@@ -30,186 +30,163 @@ ansible --version
 
 ---
 
-### A2. Сгенерировать SSH-ключ Ansible (если нет)
+### A2. Сгенерировать SSH-ключ для Ansible (если нет)
 
 ```bash
-ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C "ansible-control"
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C "ansible"
 ```
 
 ---
 
-### A3. Создать каталоги для файлов с эталонного сервера
-
-Для каждого пользователя, описанного в конфиге, нужен свой каталог:
-
-```bash
-mkdir -p roles/bootstrap/files/{USER1,root}
-```
-
-Пример для пользователей `myuser` и `myuser2`:
-```bash
-mkdir -p roles/bootstrap/files/{myuser,myuser2,root}
-```
-
----
-
-### A4. Скопировать файлы с эталонного сервера
-
-Подставьте IP эталона, имена пользователей и домен:
-
-```bash
-ETALON=root@<IP_ЭТАЛОНА>
-DEPLOY_USER=<имя_deploy_user>     # например: myuser
-```
-
-**SSH-ключи пользователей** (для пользователей с `has_authorized_keys: true`):
-```bash
-scp $ETALON:/home/$DEPLOY_USER/.ssh/authorized_keys \
-    roles/bootstrap/files/$DEPLOY_USER/authorized_keys
-```
-
-**Добавить ключ Ansible к deploy_user:**
-```bash
-cat ~/.ssh/id_ed25519.pub >> roles/bootstrap/files/$DEPLOY_USER/authorized_keys
-```
-
-**Настройки оболочки** (для пользователей с `has_bashrc: true`):
-```bash
-scp $ETALON:/home/$DEPLOY_USER/.bashrc roles/bootstrap/files/$DEPLOY_USER/.bashrc
-scp $ETALON:/root/.bashrc              roles/bootstrap/files/root/.bashrc
-```
-
-**3x-ui база данных:**
-```bash
-scp $ETALON:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
-```
-
-> **Что копировать НЕ нужно:**
-> - `sysctl.conf` — генерируется из `sysctl_settings` в конфиге
-> - `rules.v4` / `rules.v6` — генерируются из шаблонов
-> - `Caddyfile` — генерируется из шаблона
-> - **TLS-сертификаты** — Caddy получает их автоматически через Let's Encrypt
-
-> **Важно о путях сертификатов:**
-> Переменная `certs_dest_dir` (куда cert-sync копирует сертификаты) **должна совпадать**
-> с путями, прописанными в `x-ui.db` на эталонном сервере (раздел TLS в настройках инбаунда).
-> Если меняете `certs_dest_dir` — обновите и в 3X-UI на эталоне.
-
----
-
-### A5. Настроить переменные
+### A3. Создать файл переменных
 
 ```bash
 cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 ```
 
-Отредактировать `group_vars/new_vps.yml`:
+Открыть `group_vars/new_vps.yml` и заполнить:
 
-| Что заполнить | Пример | Описание |
-|---|---|---|
-| `hostname` | `vps1.example.com` | FQDN сервера |
-| `domain` | `example.com` | Домен (должен указывать на IP сервера) |
-| `ssh_port` | `275` | SSH-порт после hardening |
-| `deploy_user` | `myuser` | Пользователь для этапа 2 |
-| `acme_email` | `admin@example.com` | Email для Let's Encrypt |
-| `certs_dest_dir` | `/etc/ssl/example.com` | Путь к сертификатам (должен совпадать с x-ui.db) |
-| `caddy_https_port` | `8443` | HTTPS-порт Caddy (не 443 — занят 3x-ui) |
-| `caddy_redirect_url` | `127.0.0.1:2053` | Куда Caddy проксирует запросы |
-| `users.*.password` | Хэш SHA-512 | (см. ниже) |
-| `ipset_hosts` | `["1.2.3.4"]` | Список доверенных IP (полный доступ) |
-| `allowed_tcp_ports` | `[80, 443, 8443]` | TCP-порты открытые для всех |
-| `sysctl_settings` | dict | Параметры ядра (можно оставить по умолчанию) |
+| Параметр | Что вписать |
+|---|---|
+| `hostname` | FQDN сервера, например `vps1.example.com` |
+| `domain` | Домен, например `example.com` |
+| `ssh_port` | SSH-порт после hardening (например `275`) |
+| `deploy_user` | Имя пользователя, от которого работает этап 2 |
+| `acme_email` | Email для Let's Encrypt |
+| `certs_dest_dir` | Путь к сертификатам (должен совпадать с x-ui.db!) |
+| `caddy_https_port` | HTTPS-порт Caddy (8443 по умолчанию, т.к. 443 занят 3x-ui) |
+| `caddy_redirect_url` | Куда Caddy проксирует запросы (обычно `127.0.0.1:2053`) |
+| `users.*.password` | Хэши паролей SHA-512 (см. ниже) |
+| `ipset_hosts` | Список доверенных IP с полным доступом |
+| `allowed_tcp_ports` | Открытые TCP-порты (80, 443, 8443 по умолчанию) |
 
-**Сгенерировать хэши паролей:**
+**Сгенерировать хэш пароля:**
 ```bash
 openssl passwd -6 'ВАШ_ПАРОЛЬ'
 ```
 
-Вставить результат в поле `password` каждого пользователя.
-
-**Рекомендация — зашифровать файл:**
+**Опционально — зашифровать файл vault'ом:**
 ```bash
 ansible-vault encrypt group_vars/new_vps.yml
+# При каждом запуске playbook добавлять: --ask-vault-pass
 ```
-При запуске playbook добавлять `--ask-vault-pass`.
 
 ---
 
-> **Готово.** Файлы на месте, переменные заполнены.
-> При развёртывании новых серверов часть A не повторяется.
+### A4. Подготовить файлы с эталонного сервера
+
+Создать каталоги для каждого пользователя из конфига:
+```bash
+mkdir -p roles/bootstrap/files/{ИМЯ_ПОЛЬЗОВАТЕЛЯ,root}
+# Пример: mkdir -p roles/bootstrap/files/{myuser,root}
+```
+
+Скопировать файлы:
+```bash
+ETALON=root@<IP_ЭТАЛОНА>
+USER=<deploy_user>
+
+# SSH-ключи
+scp $ETALON:/home/$USER/.ssh/authorized_keys \
+    roles/bootstrap/files/$USER/authorized_keys
+
+# Добавить ключ Ansible к пользователю
+cat ~/.ssh/id_ed25519.pub >> roles/bootstrap/files/$USER/authorized_keys
+
+# .bashrc (если has_bashrc: true)
+scp $ETALON:/home/$USER/.bashrc  roles/bootstrap/files/$USER/.bashrc
+scp $ETALON:/root/.bashrc        roles/bootstrap/files/root/.bashrc
+
+# 3x-ui база данных
+scp $ETALON:/etc/x-ui/x-ui.db   roles/bootstrap/files/x-ui.db
+```
+
+> **Что копировать НЕ нужно:**
+> `sysctl.conf`, `rules.v4/v6`, `Caddyfile` — генерируются из переменных.
+> TLS-сертификаты — Caddy получает их сам через Let's Encrypt.
+
+> **Важно про `certs_dest_dir`:**
+> Путь, куда cert-sync кладёт сертификаты, **должен совпадать** с настройками TLS
+> в `x-ui.db` (раздел TLS в настройках инбаунда).
+> Если меняете `certs_dest_dir` — обновите и в 3X-UI на эталоне.
+
+---
+
+> ✅ **Часть A выполнена.** При развёртывании следующих серверов начинайте с Части B.
 
 ---
 
 ## Часть B. Развёртывание нового сервера
 
----
+### B1. Убедиться что DNS настроен
 
-### B1. Убедиться, что DNS настроен
-
-Домен (`domain` в конфиге) должен указывать на IP нового сервера —
-Caddy будет получать сертификат через HTTP-01 challenge на этом домене.
+Домен из конфига должен указывать на IP нового сервера.
+Caddy получает TLS-сертификат через HTTP-01 challenge — для этого нужен рабочий DNS.
 
 ```bash
-nslookup example.com
-# или
-dig example.com +short
+dig +short example.com
+# должен вернуть IP нового сервера
 ```
 
 ---
 
-### B2. Залить SSH-ключ Ansible на новый сервер
+### B2. Залить SSH-ключ на сервер
 
 ```bash
-ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<IP_НОВОГО_СЕРВЕРА>
+ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<IP>
 ```
 
 ---
 
-### B3. Создать inventory файл
+### B3. Создать inventory
 
 ```bash
 cp inventory.ini.example inventory.ini
 ```
 
-Вписать IP нового сервера. Один файл используется для обоих этапов — порт и пользователь для каждого этапа задаются автоматически в playbook.
+Вписать IP сервера вместо `YOUR_SERVER_IP`. Один файл работает для обоих этапов.
 
 ---
 
-### B4. Запустить этап 1 (порт 22, root)
+### B4. Этап 1 — базовая настройка (порт 22, root)
 
 ```bash
 ansible-playbook -i inventory.ini site-init.yml
 ```
 
-> Если используете vault: `ansible-playbook -i inventory.ini site-init.yml --ask-vault-pass`
+С vault: `ansible-playbook -i inventory.ini site-init.yml --ask-vault-pass`
 
 Что происходит:
-1. `apt full-upgrade` + перезагрузка (если были обновления)
-2. Установка пакетов из списка `extra_packages`
-3. Создание всех пользователей из `users` (кроме root)
-4. Установка hostname
-5. Копирование SSH-ключей, .bashrc, настройка sudoers
-6. Деплой sshd_config (кастомный порт, root закрыт, только ключи)
-7. Применение sysctl, ipset, iptables
-8. Перезагрузка → SSH теперь на кастомном порту, root закрыт
+1. `apt full-upgrade` (если есть обновления — перезагрузка)
+2. Установка пакетов из `extra_packages`
+3. Создание пользователей, SSH-ключи, .bashrc, sudoers
+4. Hostname
+5. SSH hardening: кастомный порт, root закрыт, только ключи
+6. sysctl, ipset, iptables
+7. Перезагрузка → SSH поднимается на `ssh_port`
+
+⚠️ **После этого шага этап 1 больше нельзя запустить повторно** — SSH на 22 закрыт, root закрыт.
 
 ---
 
-### B5. Запустить этап 2 (кастомный порт, deploy_user)
+### B5. Этап 2 — установка сервисов (ssh_port, deploy_user)
 
 ```bash
 ansible-playbook -i inventory.ini site-configure.yml
 ```
 
 Что происходит:
-1. Установка 3x-ui (если ещё не установлен)
-2. Загрузка `x-ui.db` (настройки инбаундов и путей к сертификатам)
+1. Установка 3x-ui (если не установлен)
+2. Загрузка `x-ui.db` (инбаунды, настройки TLS)
 3. Установка Caddy из официального репозитория
-4. Деплой Caddyfile (ACME email, домен, HTTPS-порт, reverse proxy)
+4. Деплой Caddyfile (ACME, домен, порты)
 5. Деплой `cert-sync.sh` + systemd drop-in (`ExecStartPost`)
-6. Финальная перезагрузка — Caddy стартует и получает TLS-сертификат
-7. `cert-sync.sh` копирует сертификаты в `certs_dest_dir`, перезапускает x-ui
-8. Проверка статуса x-ui и caddy
+6. Финальная перезагрузка:
+   - Caddy стартует → получает TLS-сертификат (HTTP-01)
+   - `cert-sync.sh` копирует сертификаты в `certs_dest_dir`
+   - x-ui перезапускается с новым сертификатом
+
+Этот шаг **идемпотентен** — можно запускать повторно для обновления конфигурации.
 
 ---
 
@@ -219,13 +196,13 @@ ansible-playbook -i inventory.ini site-configure.yml
 # Подключиться к серверу
 ssh -p <ssh_port> <deploy_user>@<IP>
 
-# Проверить сервисы
+# Статус сервисов
 sudo systemctl status x-ui caddy
 
-# Проверить сертификаты
+# Сертификаты на месте
 ls -la /etc/ssl/<domain>/
 
-# Проверить cert-sync лог
+# Лог cert-sync
 sudo journalctl -u caddy --no-pager | grep cert-sync
 ```
 
@@ -233,15 +210,31 @@ sudo journalctl -u caddy --no-pager | grep cert-sync
 
 ## Обновление конфигурации на работающем сервере
 
-> **Важно:** этап 1 (`site-init.yml`) предназначен **только для первичного развёртывания**.
-> Он подключается на порт 22 от root — после hardening этот доступ закрыт навсегда.
-> Повторный запуск этапа 1 на уже настроенном сервере завершится ошибкой подключения.
-
-Для обновления конфигурации на работающем сервере используйте **только этап 2**:
+Только этап 2 — он идемпотентен и работает через `ssh_port`:
 
 ```bash
-# Обновить x-ui.db, Caddyfile — перезалить и перезапустить сервисы
 ansible-playbook -i inventory.ini site-configure.yml
 ```
 
-Этап 2 идемпотентен: проверяет наличие бинарников перед установкой, перезагружает только если что-то изменилось.
+Используйте для: обновления `x-ui.db`, изменения Caddyfile, изменения версии 3x-ui.
+
+---
+
+## Если что-то пошло не так
+
+**Этап 1 завис или упал до конца:**
+Сервер мог перезагрузиться со старым SSH-конфигом. Попробуйте подключиться на порту 22 от root — если получается, значит этап 1 не завершился. Исправьте проблему и запустите заново.
+
+**Caddy не получил сертификат:**
+```bash
+sudo systemctl status caddy
+sudo journalctl -u caddy -n 50
+```
+Убедитесь что DNS настроен и порт 80 открыт (`allowed_tcp_ports` содержит `80`).
+
+**x-ui не видит сертификат:**
+```bash
+ls -la /etc/ssl/<domain>/
+sudo journalctl -u caddy --no-pager | grep cert-sync
+```
+Убедитесь что `certs_dest_dir` совпадает с путём в настройках инбаунда в x-ui.

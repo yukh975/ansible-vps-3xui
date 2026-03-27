@@ -6,37 +6,50 @@ Ansible playbook для быстрого развёртывания VPS-ноды
 
 ---
 
+## Быстрый старт
+
+```
+Шаг 1: Один раз подготовить файлы (INSTALL.md, Часть A)
+Шаг 2: Для каждого нового сервера → INSTALL.md, Часть B
+```
+
+Подробная пошаговая инструкция: **[INSTALL.md](INSTALL.md)**
+
+---
+
 ## Как это работает
 
-Playbook разделён на два этапа, потому что первый этап меняет SSH-порт и закрывает root — после чего подключиться по-старому уже нельзя.
+### Этап 1 — `site-init.yml` (подключение: порт 22, пользователь root)
 
-### Этап 1 — `site-init.yml` (порт 22, root)
+Выполняется **один раз** на свежем сервере. После выполнения root закрыт, SSH переходит на кастомный порт — повторный запуск невозможен.
 
-Подключается к новому серверу стандартным способом и выполняет:
-
-- `apt full-upgrade` + перезагрузка
-- Установка пакетов (настраиваемый список)
-- Создание пользователей из конфига (с SSH-ключами, паролями, опциональным NOPASSWD sudo)
+Что делает:
+- `apt full-upgrade`
+- Установка пакетов
+- Создание пользователей (SSH-ключи, пароли, sudo)
 - Установка hostname
-- SSH hardening — кастомный порт, root закрыт, только ключи
-- Применение sysctl, iptables, ipset
-- Перезагрузка → SSH поднимается на новом порту
+- SSH hardening (кастомный порт, root закрыт, только ключи)
+- sysctl, ipset, iptables
+- Перезагрузка
 
-### Этап 2 — `site-configure.yml` (кастомный порт, deploy_user)
+### Этап 2 — `site-configure.yml` (подключение: `ssh_port`, `deploy_user`)
 
-Подключается уже по новому порту от имени deploy_user:
+Можно запускать повторно. Идемпотентен.
 
-- Установка 3x-ui + загрузка x-ui.db с эталонного сервера
+Что делает:
+- Установка 3x-ui + загрузка `x-ui.db`
 - Установка Caddy + деплой Caddyfile
-- Деплой cert-sync (systemd ExecStartPost: автокопирование сертификатов из Caddy в `/etc/ssl/<домен>/`)
-- Финальная перезагрузка — Caddy стартует и получает TLS-сертификат через ACME (HTTP-01)
-- Проверка статуса x-ui и caddy
+- Деплой `cert-sync.sh` (автосинхронизация сертификатов)
+- Финальная перезагрузка → Caddy получает TLS-сертификат через Let's Encrypt
 
-### Управление сертификатами
+### Управление сертификатами (автоматически)
 
-После перезагрузки Caddy автоматически получает TLS-сертификат через Let's Encrypt (HTTP-01 challenge, порт 80). Скрипт `cert-sync.sh` запускается при каждом старте Caddy через `ExecStartPost` и копирует сертификат из хранилища Caddy в `/etc/ssl/<домен>/`, затем перезапускает x-ui — без ручного вмешательства.
+```
+Let's Encrypt → HTTP-01 challenge (порт 80) → Caddy получает cert
+→ cert-sync.sh копирует в /etc/ssl/<домен>/ → x-ui перезапускается
+```
 
-При автообновлении сертификата (раз в ~60 дней) Caddy перезапускает себя → cert-sync срабатывает автоматически.
+При автообновлении (раз в ~60 дней) всё происходит само: Caddy обновляет сертификат → cert-sync срабатывает через systemd `ExecStartPost`.
 
 ---
 
@@ -44,53 +57,51 @@ Playbook разделён на два этапа, потому что первы
 
 ```
 ansible-vps/
-├── site-init.yml                         # Этап 1 (порт 22, root)
-├── site-configure.yml                    # Этап 2 (кастомный порт, deploy_user)
-├── inventory.ini.example                 # Шаблон inventory (один на оба этапа)
+├── site-init.yml                    # Этап 1 (порт 22, root)
+├── site-configure.yml               # Этап 2 (кастомный порт, deploy_user)
+├── inventory.ini.example            # Шаблон inventory
 ├── ansible.cfg
 ├── group_vars/
-│   ├── new_vps.yml.example               # Шаблон переменных (коммитится)
-│   └── new_vps.yml                       # Ваши переменные (в .gitignore)
+│   ├── new_vps.yml.example          # Шаблон переменных (коммитится в git)
+│   └── new_vps.yml                  # Ваши переменные (в .gitignore — не коммитится!)
 ├── roles/bootstrap/
 │   ├── tasks/
-│   │   ├── main.yml                      # Диспетчер: выбирает фазу
-│   │   ├── upgrade.yml                   # apt full-upgrade + reboot
-│   │   ├── init.yml                      # Пользователи, SSH, firewall
-│   │   └── configure.yml                 # 3x-ui, Caddy, cert-sync
-│   ├── handlers/main.yml                 # restart sshd, caddy, iptables
+│   │   ├── main.yml                 # Диспетчер фаз
+│   │   ├── upgrade.yml              # apt full-upgrade
+│   │   ├── init.yml                 # Пользователи, SSH, firewall
+│   │   └── configure.yml            # 3x-ui, Caddy, cert-sync
+│   ├── handlers/main.yml
 │   ├── templates/
-│   │   ├── sshd_config.j2               # Шаблон sshd_config
-│   │   ├── iptables_v4.j2               # Шаблон правил IPv4
-│   │   ├── iptables_v6.j2               # Шаблон правил IPv6
-│   │   ├── Caddyfile.j2                 # Шаблон Caddyfile
-│   │   ├── cert-sync.sh.j2              # Скрипт синхронизации сертификатов
-│   │   └── caddy-override.conf.j2       # systemd drop-in для cert-sync
-│   └── files/                           # Файлы с эталона (в .gitignore)
+│   │   ├── sshd_config.j2
+│   │   ├── iptables_v4.j2
+│   │   ├── iptables_v6.j2
+│   │   ├── Caddyfile.j2
+│   │   ├── cert-sync.sh.j2          # Скрипт синхронизации сертов
+│   │   └── caddy-override.conf.j2   # systemd drop-in (ExecStartPost)
+│   └── files/                       # Файлы с эталона (в .gitignore!)
 │       ├── x-ui.db
-│       ├── <user>/authorized_keys       # SSH-ключи пользователей
-│       └── <user>/.bashrc              # Настройки оболочки
-├── INSTALL.md                           # Пошаговая инструкция
+│       ├── <user>/authorized_keys
+│       └── <user>/.bashrc
+├── INSTALL.md                       # Пошаговая инструкция
 └── CHANGELOG.md
 ```
 
 ---
 
-## Конфигурация
+## Переменные
 
-Все настройки хранятся в `group_vars/new_vps.yml`. Шаблон: `group_vars/new_vps.yml.example`.
+Все настройки в `group_vars/new_vps.yml`. Шаблон: `group_vars/new_vps.yml.example`.
 
-### Основные переменные
+### Сервер и доступ
 
-| Переменная | По умолчанию | Описание |
+| Переменная | Пример | Описание |
 |---|---|---|
 | `hostname` | `vps1.example.com` | FQDN сервера |
-| `domain` | `example.com` | Домен для ACME-сертификата |
+| `domain` | `example.com` | Домен (нужен для ACME и сертификатов) |
 | `ssh_port` | `275` | SSH-порт после hardening |
-| `deploy_user` | `yukh` | Пользователь для этапа 2 (должен быть в `users`) |
+| `deploy_user` | `myuser` | Пользователь для этапа 2 (должен быть в `users`) |
 
 ### Пользователи
-
-Единый словарь `users`. Каждый пользователь (кроме root) создаётся автоматически.
 
 ```yaml
 users:
@@ -98,99 +109,80 @@ users:
     groups: ["sudo"]
     shell: /bin/bash
     password: "$6$..."           # openssl passwd -6 'ПАРОЛЬ'
-    sudo_nopasswd: true          # NOPASSWD sudo (default: false)
-    has_authorized_keys: true    # копировать files/myuser/authorized_keys (default: false)
-    has_bashrc: true             # копировать files/myuser/.bashrc (default: false)
+    sudo_nopasswd: true
+    has_authorized_keys: true    # нужен файл files/myuser/authorized_keys
+    has_bashrc: true             # нужен файл files/myuser/.bashrc
   root:
     password: "$6$..."
-    has_bashrc: true
+    has_bashrc: true             # нужен файл files/root/.bashrc
 ```
 
-### Сертификаты (ACME)
+### Сертификаты
 
 ```yaml
-acme_email: "admin@example.com"     # email для регистрации в Let's Encrypt
-certs_dest_dir: "/etc/ssl/{{ domain }}"  # куда cert-sync копирует сертификаты для x-ui
+acme_email: "admin@example.com"          # email для Let's Encrypt
+certs_dest_dir: "/etc/ssl/{{ domain }}"  # куда cert-sync кладёт сертификаты
 ```
 
-> **Важно:** путь `certs_dest_dir` **должен совпадать** с настройками путей в `x-ui.db` на эталонном сервере (раздел TLS/SSL в настройках инбаунда). Если меняете путь — обновите и в 3X-UI на эталоне.
-
-Сертификаты получаются автоматически при первом старте Caddy. Перезапуск x-ui происходит автоматически после получения или обновления сертификата.
+> Путь `certs_dest_dir` **должен совпадать** с настройками TLS в `x-ui.db`.
+> Если меняете — обновите и в 3X-UI на эталонном сервере.
 
 ### Caddy
 
 | Переменная | По умолчанию | Описание |
 |---|---|---|
 | `install_caddy` | `true` | Установка Caddy |
-| `caddy_redirect_url` | `127.0.0.1:2053` | Куда Caddy проксирует HTTPS-запросы |
-| `caddy_https_port` | `8443` | HTTPS-порт Caddy (не 443, чтобы не конфликтовать с 3x-ui) |
-| `acme_email` | `admin@example.com` | Email для Let's Encrypt |
+| `acme_email` | — | Email для Let's Encrypt (обязательно) |
+| `caddy_redirect_url` | `127.0.0.1:2053` | Куда Caddy проксирует HTTPS |
+| `caddy_https_port` | `8443` | HTTPS-порт Caddy (8443 чтобы не конфликтовать с 3x-ui на 443) |
 
-> **Порты:** 3x-ui занимает порт 443 для VPN-инбаундов. Caddy использует порт 80 для ACME HTTP-01 challenge и `caddy_https_port` (8443 по умолчанию) для HTTPS. Оба порта должны быть открыты в `allowed_tcp_ports`.
+### Firewall
 
-### Опциональные компоненты
+```yaml
+allowed_tcp_ports:
+  - 80    # HTTP (ACME HTTP-01 challenge)
+  - 443   # HTTPS (3x-ui инбаунды)
+  - 8443  # HTTPS (Caddy panel)
+
+ipset_set_name: "allowed_hosts"   # имя ipset-сета
+ipset_hosts:                       # полный доступ для этих IP
+  - "1.2.3.4"
+```
+
+### Прочее
 
 | Переменная | По умолчанию | Описание |
 |---|---|---|
 | `install_3xui` | `true` | Установка 3x-ui |
-| `xui_version` | `""` (latest) | Версия 3x-ui (`""` = последняя) |
-| `ipset_set_name` | `allowed_hosts` | Имя ipset-set'а |
-| `ipset_hosts` | `[]` | Список IP — полный доступ через ipset |
-| `allowed_tcp_ports` | `[80, 443, 8443]` | TCP-порты открытые для всех |
-| `allowed_udp_ports` | `[]` | UDP-порты открытые для всех |
-| `sysctl_settings` | см. конфиг | Параметры ядра (dict) |
+| `xui_version` | `""` (latest) | Версия 3x-ui |
+| `sysctl_settings` | см. конфиг | Параметры ядра |
+| `extra_packages` | см. конфиг | Дополнительные пакеты |
 
 ---
 
-## Быстрый старт
+## Порты
 
-```bash
-# 1. Настроить переменные
-cp group_vars/new_vps.yml.example group_vars/new_vps.yml
-# Отредактировать group_vars/new_vps.yml
-
-# 2. Создать inventory
-cp inventory.ini.example inventory.ini
-# Вписать IP сервера
-
-# 3. Залить SSH-ключ на новый сервер
-ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<IP>
-
-# 4. Этап 1
-ansible-playbook -i inventory.ini site-init.yml
-
-# 5. Этап 2
-ansible-playbook -i inventory.ini site-configure.yml
 ```
-
-Подробнее: [INSTALL.md](INSTALL.md)
-
----
-
-## Важно: этап 1 — одноразовый
-
-**Этап 1 (`site-init.yml`) запускается один раз** на свежем сервере с доступом root:22.
-После его выполнения SSH переходит на кастомный порт, root закрывается — повторный запуск этапа 1 завершится ошибкой подключения.
-
-Для обновления конфигурации на работающем сервере используйте **только этап 2**:
-```bash
-ansible-playbook -i inventory.ini site-configure.yml
+22   → только этап 1 (root, временно)
+SSH  → ssh_port (275 по умолчанию)
+80   → Caddy (ACME challenge)
+443  → 3x-ui (VPN инбаунды)
+8443 → Caddy (HTTPS reverse proxy)
 ```
 
 ---
 
 ## Безопасность
 
-- `group_vars/new_vps.yml` содержит хэши паролей — **не коммитится** (в `.gitignore`)
-- `roles/bootstrap/files/` содержит ключи и БД — **не коммитится**
-- `inventory.ini` содержит реальные IP — **не коммитится**
-- Рекомендуется использовать `ansible-vault encrypt group_vars/new_vps.yml`
+- `group_vars/new_vps.yml` — хэши паролей, **не коммитится** (`.gitignore`)
+- `roles/bootstrap/files/` — ключи, БД — **не коммитится**
+- `inventory.ini` — реальные IP — **не коммитится**
+- Рекомендуется: `ansible-vault encrypt group_vars/new_vps.yml`
 
 ---
 
-## Зависимости
+## Требования
 
 - **Ansible** 2.12+ (`brew install ansible` на macOS)
-- **Управляющая машина:** Linux / macOS
 - **Целевой сервер:** Debian 12 или 13, root по SSH на порту 22
-- **DNS:** домен должен указывать на IP сервера до запуска этапа 2 (нужен для ACME)
+- **DNS:** домен должен указывать на IP сервера **до запуска этапа 2** (нужен для ACME)
