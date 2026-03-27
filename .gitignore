@@ -6,5 +6,6 @@
 inventory.ini
 
 # Секреты и файлы с сервера (ключи, сертификаты, БД, пароли)
-roles/bootstrap/files/
+roles/bootstrap/files/*
+!roles/bootstrap/files/.gitkeep
 group_vars/new_vps.yml
