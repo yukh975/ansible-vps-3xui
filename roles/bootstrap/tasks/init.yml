@@ -146,6 +146,8 @@
 
 - name: "[sysctl] Применить параметры"
   command: sysctl -e --system
+  failed_when: false
+  changed_when: true
 
 # ── ipset ─────────────────────────────────────────────────────────────────────
 
