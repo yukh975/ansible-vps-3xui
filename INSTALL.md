@@ -114,12 +114,6 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 | `allowed_tcp_ports` | `[80, 443]` | Открытые TCP-порты |
 | `allowed_udp_ports` | `[]` | Открытые UDP-порты |
 
-> **Кастомные правила iptables:**
-> Шаблоны `roles/bootstrap/templates/iptables_v4.j2` и `iptables_v6.j2` можно редактировать
-> напрямую — добавляйте любые правила между существующими блоками.
-> Дефолтные политики (`INPUT DROP`, `FORWARD DROP`, `OUTPUT ACCEPT`) и базовые правила
-> (loopback, ESTABLISHED, ICMP) уже прописаны.
-
 ---
 
 #### Как заполнять
@@ -150,7 +144,27 @@ nano roles/bootstrap/files/myuser/.bashrc
 
 ---
 
-### 1.6. (Опционально) Зашифровать конфиг через ansible-vault
+### 1.6. (Опционально) Настроить правила iptables
+
+Порты и ipset задаются в конфиге (см. шаг 1.5). Если нужны дополнительные правила — отредактируй шаблоны напрямую **до запуска playbook**:
+
+```
+roles/bootstrap/templates/iptables_v4.j2   — правила IPv4
+roles/bootstrap/templates/iptables_v6.j2   — правила IPv6
+```
+
+Уже прописаны: политики `INPUT DROP / FORWARD DROP / OUTPUT ACCEPT`, loopback, ESTABLISHED, ICMP, SSH-порт, порты из `allowed_tcp_ports` / `allowed_udp_ports`, ipset.
+
+Добавляй свои правила между существующими блоками, например:
+
+```
+# Пример: разрешить входящий WireGuard
+-A INPUT -p udp --dport 51820 -j ACCEPT
+```
+
+---
+
+### 1.7. (Опционально) Зашифровать конфиг через ansible-vault
 
 ```bash
 ansible-vault encrypt group_vars/new_vps.yml
