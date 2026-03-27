@@ -156,11 +156,10 @@
   debug:
     msg:
       - "╔══════════════════════════════════════════════════╗"
-      - "║   Нода готова к работе                          ║"
+      - "║   Нода готова к работе                           ║"
       - "╠══════════════════════════════════════════════════╣"
-      - "║  IP:      {{ ansible_host }}"
-      - "║  SSH:     порт {{ ssh_port }}, root закрыт"
-      - "║  x-ui:    {{ _xui_status.status.ActiveState }}"
-      - "║  caddy:   {{ _caddy_status.status.ActiveState }}"
-      - "║  Доступ:  ssh -p {{ ssh_port }} yukh@{{ ansible_host }}"
+      - "║  IP:      {{ ansible_host }}                         ║"
+      - "║  SSH:     порт {{ ssh_port }}, root закрыт                  ║"
+      - "║  x-ui:    {{ _xui_status.status.ActiveState }}                                 ║"
+      - "║  caddy:   {{ _caddy_status.status.ActiveState }}                                 ║"
       - "╚══════════════════════════════════════════════════╝"
