@@ -9,7 +9,7 @@
 
 ## Шаг 1. Первоначальная настройка (один раз)
 
-### 1. Клонировать репозиторий
+### 1.1. Клонировать репозиторий
 
 ```bash
 git clone https://github.com/yukh975/ansible-vps-3xui.git ansible-vps
@@ -18,7 +18,7 @@ cd ansible-vps
 
 ---
 
-### 2. Установить Ansible
+### 1.2. Установить Ansible
 
 **macOS:**
 ```bash
@@ -37,7 +37,7 @@ ansible --version
 
 ---
 
-### 3. Сгенерировать SSH-ключ (если нет)
+### 1.3. Сгенерировать SSH-ключ (если нет)
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C "ansible"
@@ -50,7 +50,7 @@ cat ~/.ssh/id_ed25519.pub
 
 ---
 
-### 4. Скопировать x-ui.db с эталонного сервера
+### 1.4. Скопировать x-ui.db с эталонного сервера
 
 Это **единственный файл**, который берётся с эталонного сервера.
 В нём хранятся инбаунды и настройки TLS.
@@ -66,7 +66,7 @@ scp root@<IP_ЭТАЛОНА>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 
 ---
 
-### 5. Создать файл переменных
+### 1.5. Создать файл переменных
 
 ```bash
 cp group_vars/new_vps.yml.example group_vars/new_vps.yml
@@ -100,7 +100,6 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 | Параметр | По умолчанию | Описание |
 |---|---|---|
 | `caddy_listen_port` | `4443` | Порт, на который x-ray отправляет fallback-трафик |
-| `caddy_listen_port` | `4443` | Порт, на который x-ray отправляет fallback-трафик |
 | `caddy_fallback_url` | — | Внешний сайт-камуфляж, куда Caddy редиректит трафик |
 | `install_3xui` | `true` | Устанавливать 3x-ui |
 | `install_caddy` | `true` | Устанавливать Caddy |
@@ -116,7 +115,10 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 | `allowed_udp_ports` | `[]` | Открытые UDP-порты |
 
 > **Кастомные правила iptables:**
-> Шаблоны `roles/bootstrap/templates/iptables_v4.j2` и `iptables_v6.j2` можно редактировать напрямую — добавляйте любые правила в нужное место между существующими блоками. Дефолтные политики (`INPUT DROP`, `FORWARD DROP`, `OUTPUT ACCEPT`) и базовые правила (loopback, ESTABLISHED, ICMP) уже прописаны.
+> Шаблоны `roles/bootstrap/templates/iptables_v4.j2` и `iptables_v6.j2` можно редактировать
+> напрямую — добавляйте любые правила между существующими блоками.
+> Дефолтные политики (`INPUT DROP`, `FORWARD DROP`, `OUTPUT ACCEPT`) и базовые правила
+> (loopback, ESTABLISHED, ICMP) уже прописаны.
 
 ---
 
@@ -148,7 +150,7 @@ nano roles/bootstrap/files/myuser/.bashrc
 
 ---
 
-### 6. (Опционально) Зашифровать конфиг через ansible-vault
+### 1.6. (Опционально) Зашифровать конфиг через ansible-vault
 
 ```bash
 ansible-vault encrypt group_vars/new_vps.yml
@@ -167,7 +169,7 @@ ansible-playbook ... --ask-vault-pass
 
 ## Шаг 2. Развёртывание нового сервера
 
-### 1. Убедиться что DNS настроен (только если `install_caddy: true`)
+### 2.1. Убедиться что DNS настроен (только если `install_caddy: true`)
 
 DNS нужен исключительно для получения TLS-сертификата через Caddy ACME (HTTP-01 challenge — Let's Encrypt обращается на порт 80 домена). Всё остальное — SSH, пользователи, firewall, 3x-ui — работает без DNS.
 
@@ -180,7 +182,7 @@ dig +short example.com
 
 ---
 
-### 2. Залить SSH-ключ на сервер
+### 2.2. Залить SSH-ключ на сервер
 
 ```bash
 ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<IP>
@@ -192,7 +194,7 @@ ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<IP>
 
 ---
 
-### 3. Создать inventory
+### 2.3. Создать inventory
 
 ```bash
 cp inventory.ini.example inventory.ini
@@ -202,7 +204,7 @@ cp inventory.ini.example inventory.ini
 
 ---
 
-### 4. Запустить этап 1 (порт 22, root)
+### 2.4. Запустить этап 1 (порт 22, root)
 
 ```bash
 ansible-playbook -i inventory.ini site-init.yml
@@ -223,7 +225,7 @@ ansible-playbook -i inventory.ini site-init.yml --ask-vault-pass
 
 ---
 
-### 5. Запустить этап 2 (ssh_port, deploy_user)
+### 2.5. Запустить этап 2 (ssh_port, deploy_user)
 
 ```bash
 ansible-playbook -i inventory.ini site-configure.yml
@@ -246,7 +248,7 @@ ansible-playbook -i inventory.ini site-configure.yml --ask-vault-pass
 
 ---
 
-### 6. Проверить результат
+### 2.6. Проверить результат
 
 ```bash
 # Подключиться к серверу
