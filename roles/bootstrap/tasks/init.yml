@@ -124,6 +124,18 @@
 
 # ── sysctl ────────────────────────────────────────────────────────────────────
 
+- name: "[sysctl] Загрузить модуль tcp_bbr"
+  command: modprobe tcp_bbr
+  changed_when: false
+
+- name: "[sysctl] Сделать загрузку tcp_bbr постоянной"
+  copy:
+    content: "tcp_bbr\n"
+    dest: /etc/modules-load.d/tcp_bbr.conf
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: "[sysctl] Записать параметры в файл"
   template:
     src: sysctl.conf.j2
