@@ -75,15 +75,12 @@
   stat:
     path: /usr/bin/caddy
   register: _caddy_binary
-  when: install_caddy | default(true)
 
 - name: "[caddy] Установить зависимости"
   apt:
     name: [debian-keyring, debian-archive-keyring, apt-transport-https, curl]
     state: present
-  when:
-    - install_caddy | default(true)
-    - not _caddy_binary.stat.exists
+  when: not _caddy_binary.stat.exists
 
 - name: "[caddy] Добавить GPG ключ репозитория"
   shell: |
@@ -92,9 +89,7 @@
   args:
     executable: /bin/bash
     creates: /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  when:
-    - install_caddy | default(true)
-    - not _caddy_binary.stat.exists
+  when: not _caddy_binary.stat.exists
 
 - name: "[caddy] Добавить репозиторий"
   shell: |
@@ -103,22 +98,17 @@
   args:
     executable: /bin/bash
     creates: /etc/apt/sources.list.d/caddy-stable.list
-  when:
-    - install_caddy | default(true)
-    - not _caddy_binary.stat.exists
+  when: not _caddy_binary.stat.exists
 
 - name: "[caddy] apt update"
   apt:
     update_cache: yes
-  when:
-    - install_caddy | default(true)
-    - not _caddy_binary.stat.exists
+  when: not _caddy_binary.stat.exists
 
 - name: "[caddy] Установить Caddy"
   apt:
     name: caddy
     state: present
-  when: install_caddy | default(true)
 
 - name: "[caddy] Создать /etc/caddy"
   file:
@@ -127,7 +117,6 @@
     owner: root
     group: root
     mode: "0755"
-  when: install_caddy | default(true)
 
 - name: "[caddy] Сгенерировать Caddyfile"
   template:
@@ -137,7 +126,6 @@
     group: root
     mode: "0644"
   notify: restart caddy
-  when: install_caddy | default(true)
 
 # ── cert-sync ─────────────────────────────────────────────────────────────────
 # cert-sync копирует сертификаты Caddy в certs_dest_dir и перезапускает x-ui.
@@ -151,7 +139,6 @@
     owner: root
     group: root
     mode: "0755"
-  when: install_caddy | default(true)
 
 - name: "[cert-sync] Установить скрипт"
   template:
@@ -160,7 +147,6 @@
     owner: root
     group: root
     mode: "0755"
-  when: install_caddy | default(true)
 
 - name: "[cert-sync] Создать каталог для systemd override"
   file:
@@ -169,7 +155,6 @@
     owner: root
     group: root
     mode: "0755"
-  when: install_caddy | default(true)
 
 - name: "[cert-sync] Установить systemd override для Caddy"
   template:
@@ -179,14 +164,12 @@
     group: root
     mode: "0644"
   notify: reload systemd and restart caddy
-  when: install_caddy | default(true)
 
 - name: "[caddy] Включить Caddy в автозагрузку"
   systemd:
     name: caddy
     enabled: yes
     daemon_reload: yes
-  when: install_caddy | default(true)
 
 # ── Финальная перезагрузка ────────────────────────────────────────────────────
 # После перезагрузки Caddy стартует, получает сертификат,
@@ -210,7 +193,6 @@
   systemd:
     name: caddy
   register: _caddy_status
-  when: install_caddy | default(true)
 
 - name: "=== ГОТОВО ==="
   debug:
@@ -221,7 +203,7 @@
       - "║  IP:      {{ ansible_host }}"
       - "║  SSH:     порт {{ ssh_port }}, root закрыт"
       - "║  x-ui:    {{ _xui_status.status.ActiveState | default('не установлен') }}"
-      - "║  caddy:   {{ _caddy_status.status.ActiveState | default('не установлен') }}"
+      - "║  caddy:   {{ _caddy_status.status.ActiveState }}"
       - "║  ACME:    сертификат будет получен при первом старте Caddy"
       - "╠══════════════════════════════════════════════════════════╣"
       - "║  Если Ansible больше не нужен — удалите технического     ║"

@@ -70,8 +70,6 @@ xui_db_dest: "/etc/x-ui/x-ui.db"
 #   Не-VPN (fallback) трафик x-ray отправляет на Caddy: 127.0.0.1:caddy_listen_port.
 #   Caddy редиректит этот трафик на внешний сайт-камуфляж (caddy_fallback_url).
 #   Сертификаты Caddy получает через ACME (HTTP-01, порт 80) и синхронизирует в certs_dest_dir.
-install_caddy: true                 # false = пропустить установку Caddy
-
 # Порт, на котором Caddy слушает fallback-трафик от x-ray (127.0.0.1:caddy_listen_port)
 caddy_listen_port: 4443
 

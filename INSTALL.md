@@ -102,7 +102,6 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 | `caddy_listen_port` | `4443` | Порт, на который x-ray отправляет fallback-трафик |
 | `caddy_fallback_url` | — | Внешний сайт-камуфляж, куда Caddy редиректит трафик |
 | `install_3xui` | `true` | Устанавливать 3x-ui |
-| `install_caddy` | `true` | Устанавливать Caddy |
 | `xui_version` | `""` (latest) | Версия 3x-ui, например `2.3.11` |
 
 #### Firewall (опционально)
@@ -195,11 +194,9 @@ ansible-vault edit group_vars/new_vps.yml
 
 ## Шаг 2. Развёртывание нового сервера
 
-### 2.1. Убедиться что DNS настроен (только если `install_caddy: true`)
+### 2.1. Убедиться что DNS настроен
 
-DNS нужен исключительно для получения TLS-сертификата через Caddy ACME (HTTP-01 challenge — Let's Encrypt обращается на порт 80 домена). Всё остальное — SSH, пользователи, firewall, 3x-ui — работает без DNS.
-
-Если сервер в локальной сети или DNS ещё не настроен — поставьте `install_caddy: false` в конфиге и пропустите этот шаг.
+DNS нужен для получения TLS-сертификата через Caddy ACME (HTTP-01 challenge — Let's Encrypt обращается на порт 80 домена). Всё остальное — SSH, пользователи, firewall, 3x-ui — работает без DNS.
 
 **Что именно должно быть настроено:** в DNS-зоне домена должна существовать **A-запись**, указывающая на IP нового сервера. То, что у вас работает интернет и резолвится `google.com` — не считается.
 

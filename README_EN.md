@@ -135,7 +135,6 @@ certs_dest_dir: "/etc/ssl/{{ domain }}"  # where cert-sync places the certificat
 
 | Variable | Default | Description |
 |---|---|---|
-| `install_caddy` | `true` | Install Caddy |
 | `acme_email` | — | Email for Let's Encrypt (required) |
 | `caddy_listen_port` | `4443` | Port where x-ray sends fallback traffic |
 | `caddy_fallback_url` | — | External camouflage site for fallback traffic |
@@ -185,7 +184,7 @@ ssh_port        → SSH after hardening
 ## Security
 
 - `group_vars/new_vps.yml` — password hashes, **not committed** (`.gitignore`)
-- `roles/bootstrap/files/` — keys, DB — **not committed**
+- `roles/bootstrap/files/` — x-ui DB — **not committed**
 - `inventory.ini` — real IPs — **not committed**
 - Recommended: `ansible-vault encrypt group_vars/new_vps.yml`
 

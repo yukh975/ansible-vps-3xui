@@ -102,7 +102,6 @@ Open `group_vars/new_vps.yml` and fill in the parameters:
 | `caddy_listen_port` | `4443` | Port where x-ray sends fallback traffic |
 | `caddy_fallback_url` | — | External camouflage site that Caddy redirects traffic to |
 | `install_3xui` | `true` | Install 3x-ui |
-| `install_caddy` | `true` | Install Caddy |
 | `xui_version` | `""` (latest) | 3x-ui version, e.g. `2.3.11` |
 
 #### Firewall (optional)
@@ -195,11 +194,9 @@ ansible-vault edit group_vars/new_vps.yml
 
 ## Step 2. Deploy a New Server
 
-### 2.1. Make sure DNS is configured (only if `install_caddy: true`)
+### 2.1. Make sure DNS is configured
 
-DNS is required solely for obtaining a TLS certificate via Caddy ACME (HTTP-01 challenge — Let's Encrypt connects to port 80 of the domain). Everything else — SSH, users, firewall, 3x-ui — works without DNS.
-
-If the server is on a local network or DNS is not yet set up, set `install_caddy: false` in the config and skip this step.
+DNS is required for obtaining a TLS certificate via Caddy ACME (HTTP-01 challenge — Let's Encrypt connects to port 80 of the domain). Everything else — SSH, users, firewall, 3x-ui — works without DNS.
 
 **What exactly needs to be configured:** an **A record** in the domain's DNS zone pointing to the IP of the new server. Having internet access and being able to resolve `google.com` does not count.
 
