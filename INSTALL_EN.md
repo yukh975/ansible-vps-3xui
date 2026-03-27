@@ -63,6 +63,12 @@ scp root@<REFERENCE_IP>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 > Ansible automatically updates the certificate paths in `x-ui.db` after copying it —
 > writes `certs_dest_dir/hostname.crt` and `certs_dest_dir/hostname.key` into the database.
 > No changes needed on the reference server.
+>
+> **⚠️ Certificate paths in inbounds:**
+> Ansible only updates the **panel** certificate paths (`webCertFile`, `webKeyFile`).
+> If inbounds on the reference server have TLS configured with explicit certificate paths —
+> those paths are **not updated automatically**. After deployment, open the x-ui panel,
+> check the TLS settings of each inbound, and update the paths manually if needed.
 
 ---
 
