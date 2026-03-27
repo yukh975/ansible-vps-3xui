@@ -44,14 +44,29 @@
     label: "{{ item.key }}"
   when: item.key != 'root'
 
-- name: "[users] SSH authorized_keys для {{ item.0.key }}"
-  authorized_key:
-    user: "{{ item.0.key }}"
-    key: "{{ item.1 }}"
-    state: present
-  loop: "{{ users | dict2items | subelements('value.ssh_public_keys', skip_missing=True) }}"
+- name: "[users] Создать ~/.ssh для {{ item.key }}"
+  file:
+    path: "{{ '/root/.ssh' if item.key == 'root' else '/home/' + item.key + '/.ssh' }}"
+    state: directory
+    owner: "{{ item.key }}"
+    group: "{{ item.key if item.key != 'root' else 'root' }}"
+    mode: "0700"
+  loop: "{{ users | dict2items }}"
   loop_control:
-    label: "{{ item.0.key }}"
+    label: "{{ item.key }}"
+  when: item.value.ssh_public_keys | default([]) | length > 0
+
+- name: "[users] SSH authorized_keys для {{ item.key }}"
+  copy:
+    content: "{{ item.value.ssh_public_keys | join('\n') }}\n"
+    dest: "{{ '/root/.ssh/authorized_keys' if item.key == 'root' else '/home/' + item.key + '/.ssh/authorized_keys' }}"
+    owner: "{{ item.key }}"
+    group: "{{ item.key if item.key != 'root' else 'root' }}"
+    mode: "0600"
+  loop: "{{ users | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: item.value.ssh_public_keys | default([]) | length > 0
 
 
 - name: "[users] Скопировать .bashrc для {{ item.key }}"
