@@ -138,6 +138,7 @@ certs_dest_dir: "/etc/ssl/{{ hostname }}"  # where cert-sync places the certific
 |---|---|---|
 | `acme_email` | — | Email for Let's Encrypt (required) |
 | `caddy_listen_port` | `4443` | Port where x-ray sends fallback traffic |
+| `caddy_https_port` | `8443` | Caddy HTTPS port — not 443 (used by x-ray); closed externally; cert obtained via HTTP-01 on port 80 |
 | `caddy_fallback_url` | — | External camouflage site for fallback traffic |
 
 ### Firewall
