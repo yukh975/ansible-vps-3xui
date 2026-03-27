@@ -37,15 +37,7 @@ ansible --version
 
 ---
 
-### 1.3. Установить зависимости Ansible
-
-```bash
-ansible-galaxy collection install -r requirements.yml
-```
-
----
-
-### 1.4. Сгенерировать SSH-ключ (если нет)
+### 1.3. Сгенерировать SSH-ключ (если нет)
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C "ansible"
@@ -58,7 +50,7 @@ cat ~/.ssh/id_ed25519.pub
 
 ---
 
-### 1.5. Скопировать x-ui.db с эталонного сервера
+### 1.4. Скопировать x-ui.db с эталонного сервера
 
 Это **единственный файл**, который берётся с эталонного сервера.
 В нём хранятся инбаунды и настройки TLS.
@@ -74,7 +66,7 @@ scp root@<IP_ЭТАЛОНА>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 
 ---
 
-### 1.6. Создать файл переменных
+### 1.5. Создать файл переменных
 
 ```bash
 cp group_vars/new_vps.yml.example group_vars/new_vps.yml
@@ -158,7 +150,7 @@ nano roles/bootstrap/files/myuser/.bashrc
 
 ---
 
-### 1.7. (Опционально) Зашифровать конфиг через ansible-vault
+### 1.6. (Опционально) Зашифровать конфиг через ansible-vault
 
 ```bash
 ansible-vault encrypt group_vars/new_vps.yml
