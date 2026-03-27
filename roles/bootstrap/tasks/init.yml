@@ -30,7 +30,7 @@
 
 # ── Пользователи (цикл, кроме root) ─────────────────────────────────────────
 
-- name: "[users] Создать пользователя {{ item.key }}"
+- name: "[users] Создать пользователей"
   user:
     name: "{{ item.key }}"
     groups: "{{ item.value.groups | default([]) | join(',') }}"
@@ -44,7 +44,7 @@
     label: "{{ item.key }}"
   when: item.key != 'root'
 
-- name: "[users] Создать ~/.ssh для {{ item.key }}"
+- name: "[users] Создать ~/.ssh"
   file:
     path: "{{ '/root/.ssh' if item.key == 'root' else '/home/' + item.key + '/.ssh' }}"
     state: directory
@@ -56,7 +56,7 @@
     label: "{{ item.key }}"
   when: item.value.ssh_public_keys | default([]) | length > 0
 
-- name: "[users] SSH authorized_keys для {{ item.key }}"
+- name: "[users] SSH authorized_keys"
   copy:
     content: "{{ item.value.ssh_public_keys | join('\n') }}\n"
     dest: "{{ '/root/.ssh/authorized_keys' if item.key == 'root' else '/home/' + item.key + '/.ssh/authorized_keys' }}"
@@ -69,9 +69,9 @@
   when: item.value.ssh_public_keys | default([]) | length > 0
 
 
-- name: "[users] Скопировать .bashrc для {{ item.key }}"
+- name: "[users] Скопировать .bashrc"
   copy:
-    src: "files/{{ item.key }}/.bashrc"
+    src: "{{ item.key }}/.bashrc"
     dest: "{{ '/root/.bashrc' if item.key == 'root' else '/home/' + item.key + '/.bashrc' }}"
     owner: "{{ item.key }}"
     group: "{{ item.key if item.key != 'root' else 'root' }}"
@@ -79,9 +79,11 @@
   loop: "{{ users | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
-  when: item.value.has_bashrc | default(false)
+  when:
+    - item.value.has_bashrc | default(false)
+    - lookup('fileglob', role_path + '/files/' + item.key + '/.bashrc') | length > 0
 
-- name: "[users] sudo без пароля для {{ item.key }}"
+- name: "[users] sudo без пароля"
   copy:
     dest: "/etc/sudoers.d/{{ item.key }}"
     content: "{{ item.key }} ALL=(ALL) NOPASSWD: ALL\n"
