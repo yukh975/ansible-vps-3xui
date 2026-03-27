@@ -207,13 +207,9 @@
 # т.к. reboot уже запущен асинхронно. После перезагрузки правила
 # подхватывает netfilter-persistent.
 
-- name: "[security] Удалить authorized_keys root"
-  file:
-    path: /root/.ssh/authorized_keys
-    state: absent
-
-- name: "Применить firewall и перезагрузить сервер"
+- name: "Применить firewall, очистить root-ключи и перезагрузить сервер"
   shell: |
+    rm -f /root/.ssh/authorized_keys
     iptables-restore < {{ iptables_rules_v4_dest }}
     ip6tables-restore < {{ iptables_rules_v6_dest }}
     netfilter-persistent save
