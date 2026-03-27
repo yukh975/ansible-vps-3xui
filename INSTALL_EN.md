@@ -62,7 +62,7 @@ scp root@<REFERENCE_IP>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 > **Important note about `certs_dest_dir`:**
 > The path where cert-sync places certificates **must match** the TLS settings
 > in `x-ui.db` (the TLS section in inbound settings).
-> Default: `/etc/ssl/<domain>`. If you change it, update it in 3X-UI on the reference server too.
+> Default: `/etc/ssl/<hostname>`. If you change it, update it in 3X-UI on the reference server too.
 
 ---
 
@@ -78,8 +78,7 @@ Open `group_vars/new_vps.yml` and fill in the parameters:
 
 | Parameter | Description |
 |---|---|
-| `hostname` | Server FQDN, e.g. `vps1.example.com` |
-| `domain` | Domain for the ACME certificate, e.g. `example.com` |
+| `hostname` | Server FQDN, e.g. `vps1.example.com` — used as hostname and for the ACME certificate |
 | `ssh_port` | SSH port after hardening (not 22) |
 | `deploy_user` | Username for stage 2 — **must be listed in `users`** |
 | `acme_email` | Email for Let's Encrypt registration |
@@ -283,7 +282,7 @@ ssh -p <ssh_port> <deploy_user>@<IP>
 sudo systemctl status x-ui caddy
 
 # Certificates in place
-ls -la /etc/ssl/<domain>/
+ls -la /etc/ssl/<hostname>/
 
 # cert-sync log
 sudo journalctl -u caddy --no-pager | grep cert-sync
@@ -332,7 +331,7 @@ Make sure DNS is configured and port 80 is open (`allowed_tcp_ports` contains `8
 
 **x-ui does not see the certificate:**
 ```bash
-ls -la /etc/ssl/<domain>/
+ls -la /etc/ssl/<hostname>/
 sudo journalctl -u caddy --no-pager | grep cert-sync
 ```
 Make sure `certs_dest_dir` matches the path in x-ui inbound TLS settings.

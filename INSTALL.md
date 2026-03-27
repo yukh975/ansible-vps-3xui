@@ -62,7 +62,7 @@ scp root@<IP_ЭТАЛОНА>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 > **Важно про `certs_dest_dir`:**
 > Путь, куда cert-sync кладёт сертификаты, **должен совпадать** с настройками TLS
 > в `x-ui.db` (раздел TLS в настройках инбаунда).
-> По умолчанию: `/etc/ssl/<domain>`. Если меняете — обновите и в 3X-UI на эталоне.
+> По умолчанию: `/etc/ssl/<hostname>`. Если меняете — обновите и в 3X-UI на эталоне.
 
 ---
 
@@ -78,8 +78,7 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 
 | Параметр | Описание |
 |---|---|
-| `hostname` | FQDN сервера, например `vps1.example.com` |
-| `domain` | Домен для ACME-сертификата, например `example.com` |
+| `hostname` | FQDN сервера, например `vps1.example.com` — используется как hostname и для ACME-сертификата |
 | `ssh_port` | SSH-порт после hardening (не 22) |
 | `deploy_user` | Имя пользователя для этапа 2 — **должен быть в `users`** |
 | `acme_email` | Email для регистрации в Let's Encrypt |
@@ -283,7 +282,7 @@ ssh -p <ssh_port> <deploy_user>@<IP>
 sudo systemctl status x-ui caddy
 
 # Сертификаты на месте
-ls -la /etc/ssl/<domain>/
+ls -la /etc/ssl/<hostname>/
 
 # Лог cert-sync
 sudo journalctl -u caddy --no-pager | grep cert-sync
@@ -332,7 +331,7 @@ sudo journalctl -u caddy -n 50
 
 **x-ui не видит сертификат:**
 ```bash
-ls -la /etc/ssl/<domain>/
+ls -la /etc/ssl/<hostname>/
 sudo journalctl -u caddy --no-pager | grep cert-sync
 ```
 Убедитесь что `certs_dest_dir` совпадает с путём в настройках инбаунда в x-ui.

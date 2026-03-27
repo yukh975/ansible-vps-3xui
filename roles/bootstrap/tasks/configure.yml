@@ -58,8 +58,8 @@
 - name: "[3xui] Обновить пути к сертификатам в БД"
   command: >
     sqlite3 {{ xui_db_dest }}
-    "UPDATE settings SET value='{{ certs_dest_dir }}/{{ domain }}.crt' WHERE key='webCertFile';
-     UPDATE settings SET value='{{ certs_dest_dir }}/{{ domain }}.key' WHERE key='webKeyFile';"
+    "UPDATE settings SET value='{{ certs_dest_dir }}/{{ hostname }}.crt' WHERE key='webCertFile';
+     UPDATE settings SET value='{{ certs_dest_dir }}/{{ hostname }}.key' WHERE key='webKeyFile';"
   when: install_3xui | default(true)
 
 - name: "[3xui] Включить x-ui в автозагрузку"

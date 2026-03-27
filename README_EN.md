@@ -52,7 +52,7 @@ What it does:
 
 ```
 Let's Encrypt → HTTP-01 challenge (port 80) → Caddy obtains cert
-→ cert-sync.sh copies to /etc/ssl/<domain>/ → x-ui restarts
+→ cert-sync.sh copies to /etc/ssl/<hostname>/ → x-ui restarts
 ```
 
 On auto-renewal (every ~60 days) everything happens automatically: Caddy renews the certificate → cert-sync is triggered via the systemd `ExecStartPost` hook.
@@ -100,8 +100,7 @@ All settings are in `group_vars/new_vps.yml`. Template: `group_vars/new_vps.yml.
 
 | Variable | Example | Description |
 |---|---|---|
-| `hostname` | `vps1.example.com` | Server FQDN |
-| `domain` | `example.com` | Domain (required for ACME and certificates) |
+| `hostname` | `vps1.example.com` | Server FQDN — used as hostname and for the ACME certificate |
 | `ssh_port` | `275` | SSH port after hardening |
 | `deploy_user` | `myuser` | User for stage 2 (must be listed in `users`) |
 
@@ -125,7 +124,7 @@ users:
 
 ```yaml
 acme_email: "admin@example.com"          # email for Let's Encrypt
-certs_dest_dir: "/etc/ssl/{{ domain }}"  # where cert-sync places the certificates
+certs_dest_dir: "/etc/ssl/{{ hostname }}"  # where cert-sync places the certificates
 ```
 
 > The `certs_dest_dir` path **must match** the TLS settings in `x-ui.db`.

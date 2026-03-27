@@ -100,8 +100,7 @@ ansible-vps/
 
 | Переменная | Пример | Описание |
 |---|---|---|
-| `hostname` | `vps1.example.com` | FQDN сервера |
-| `domain` | `example.com` | Домен (нужен для ACME и сертификатов) |
+| `hostname` | `vps1.example.com` | FQDN сервера (используется для сертификата и hostname) |
 | `ssh_port` | `275` | SSH-порт после hardening |
 | `deploy_user` | `myuser` | Пользователь для этапа 2 (должен быть в `users`) |
 
@@ -125,7 +124,7 @@ users:
 
 ```yaml
 acme_email: "admin@example.com"          # email для Let's Encrypt
-certs_dest_dir: "/etc/ssl/{{ domain }}"  # куда cert-sync кладёт сертификаты
+certs_dest_dir: "/etc/ssl/{{ hostname }}"  # куда cert-sync кладёт сертификаты
 ```
 
 > Путь `certs_dest_dir` **должен совпадать** с настройками TLS в `x-ui.db`.

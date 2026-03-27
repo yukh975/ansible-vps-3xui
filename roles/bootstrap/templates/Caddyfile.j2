@@ -6,9 +6,9 @@
     email {{ acme_email }}
 }
 
-# ACME: Caddy получает сертификат для домена через HTTP-01 challenge (порт 80).
+# ACME: Caddy получает сертификат для хоста через HTTP-01 challenge (порт 80).
 # Сертификат затем синхронизируется в certs_dest_dir для использования x-ray.
-{{ domain }} {
+{{ hostname }} {
     redir {{ caddy_fallback_url }}{uri} permanent
 }
 
