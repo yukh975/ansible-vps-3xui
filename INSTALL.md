@@ -115,6 +115,9 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 | `allowed_tcp_ports` | `[80, 443]` | Открытые TCP-порты |
 | `allowed_udp_ports` | `[]` | Открытые UDP-порты |
 
+> **Кастомные правила iptables:**
+> Шаблоны `roles/bootstrap/templates/iptables_v4.j2` и `iptables_v6.j2` можно редактировать напрямую — добавляйте любые правила в нужное место между существующими блоками. Дефолтные политики (`INPUT DROP`, `FORWARD DROP`, `OUTPUT ACCEPT`) и базовые правила (loopback, ESTABLISHED, ICMP) уже прописаны.
+
 ---
 
 #### Как заполнять
