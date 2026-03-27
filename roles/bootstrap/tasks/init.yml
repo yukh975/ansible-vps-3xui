@@ -165,36 +165,6 @@
   changed_when: false
   when: ipset_hosts | default([]) | length > 0
 
-- name: "[ipset] Сохранить ipset"
-  shell: ipset save > /etc/ipset.conf
-  changed_when: true
-
-- name: "[ipset] Установить systemd-сервис восстановления ipset"
-  copy:
-    dest: /etc/systemd/system/ipset-restore.service
-    owner: root
-    group: root
-    mode: "0644"
-    content: |
-      [Unit]
-      Description=Restore ipset rules
-      Before=netfilter-persistent.service
-      ConditionFileNotEmpty=/etc/ipset.conf
-
-      [Service]
-      Type=oneshot
-      ExecStart=/sbin/ipset restore -f /etc/ipset.conf
-      RemainAfterExit=yes
-
-      [Install]
-      WantedBy=multi-user.target
-
-- name: "[ipset] Включить ipset-restore"
-  systemd:
-    name: ipset-restore
-    enabled: yes
-    daemon_reload: yes
-
 - name: "[ipset] Включить netfilter-persistent"
   systemd:
     name: netfilter-persistent
