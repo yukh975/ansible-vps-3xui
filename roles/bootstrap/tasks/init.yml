@@ -8,8 +8,7 @@
 # ── Hostname ─────────────────────────────────────────────────────────────────
 
 - name: "[hostname] Установить hostname"
-  hostname:
-    name: "{{ hostname }}"
+  command: hostnamectl set-hostname {{ hostname }}
 
 - name: "[hostname] Прописать в /etc/hosts"
   lineinfile:
@@ -266,6 +265,6 @@
       - "╠══════════════════════════════════════════════════════════╣"
       - "║  SSH теперь на порту {{ ssh_port }}, root закрыт                    ║"
       - "║  Следующий шаг:                                          ║"
-      - "║  ansible-playbook -i inventory-configure.ini \           ║"
+      - "║  ansible-playbook -i inventory-configure.ini  \           ║"
       - "║                   site-configure.yml                     ║"
       - "╚══════════════════════════════════════════════════════════╝"
