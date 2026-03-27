@@ -8,12 +8,12 @@ Takes a freshly installed Debian 12/13 with root SSH access and turns it into a 
 
 ## Quick Start
 
-```
-Step 1: Prepare files once (INSTALL.md, Part A)
-Step 2: For each new server → INSTALL.md, Part B
-```
+Full step-by-step instructions: **[INSTALL_EN.md](INSTALL_EN.md)**
 
-Full step-by-step instructions: **[INSTALL.md](INSTALL.md)**
+```
+Step 1 — once: clone the repo, configure vars, copy x-ui.db
+Step 2 — per server: run site-init.yml, then site-configure.yml
+```
 
 ---
 
