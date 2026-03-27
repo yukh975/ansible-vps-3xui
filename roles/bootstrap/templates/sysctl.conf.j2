@@ -1,0 +1,4 @@
+# /etc/sysctl.d/99-custom.conf — управляется Ansible, не редактировать вручную
+{% for key, value in sysctl_settings.items() %}
+{{ key }} = {{ value }}
+{% endfor %}

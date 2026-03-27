@@ -122,16 +122,16 @@
 
 # ── sysctl ────────────────────────────────────────────────────────────────────
 
+- name: "[sysctl] Записать параметры в файл"
+  template:
+    src: sysctl.conf.j2
+    dest: "{{ sysctl_dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: "[sysctl] Применить параметры"
-  sysctl:
-    name: "{{ item.key }}"
-    value: "{{ item.value | string }}"
-    state: present
-    reload: yes
-    sysctl_file: "{{ sysctl_dest }}"
-  loop: "{{ sysctl_settings | dict2items }}"
-  loop_control:
-    label: "{{ item.key }}"
+  command: sysctl --system
 
 # ── ipset ─────────────────────────────────────────────────────────────────────
 
