@@ -13,7 +13,7 @@ ssh_port: 275
 # ── Основной пользователь ────────────────────────────────────────────────────
 # Имя пользователя, от которого Ansible работает на этапе 2 (после hardening).
 # Должен совпадать с одним из ключей в словаре users ниже.
-deploy_user: yukh
+deploy_user: myuser
 
 # ── Пользователи ─────────────────────────────────────────────────────────────
 #
@@ -30,28 +30,21 @@ deploy_user: yukh
 #   ansible-vault encrypt group_vars/new_vps.yml
 #
 # Флаги:
-#   groups             — список групп Linux (по умолчанию [])
-#   shell              — оболочка (по умолчанию /bin/bash)
-#   password           — хэш пароля SHA-512
-#   sudo_nopasswd      — создать /etc/sudoers.d/<user> с NOPASSWD (по умолчанию false)
-#   has_authorized_keys — скопировать files/<user>/authorized_keys (по умолчанию false)
-#   has_bashrc         — скопировать files/<user>/.bashrc (по умолчанию false)
+#   groups          — список групп Linux (по умолчанию [])
+#   shell           — оболочка (по умолчанию /bin/bash)
+#   password        — хэш пароля SHA-512
+#   sudo_nopasswd   — создать /etc/sudoers.d/<user> с NOPASSWD (по умолчанию false)
+#   ssh_public_keys — список публичных SSH-ключей (cat ~/.ssh/id_ed25519.pub)
 #
 users:
-  yukh:
-    groups: ["sudo", "root"]
+  myuser:
+    groups: ["sudo"]
     shell: /bin/bash
     password: "$6$ЗАМЕНИТЕ$НА_ХЭШ_ПАРОЛЯ"
     sudo_nopasswd: true
     ssh_public_keys:
       - "ssh-ed25519 ЗАМЕНИТЕ_НА_ВАШ_ПУБЛИЧНЫЙ_КЛЮЧ ansible"
-  ca:
-    groups: []
-    shell: /bin/bash
-    password: "$6$ЗАМЕНИТЕ$НА_ХЭШ_ПАРОЛЯ"
-    sudo_nopasswd: true
-    ssh_public_keys:
-      - "ssh-ed25519 ЗАМЕНИТЕ_НА_ВАШ_ПУБЛИЧНЫЙ_КЛЮЧ ansible"
+      # - "ssh-ed25519 ВТОРОЙ_КЛЮЧ personal-laptop"   # можно добавить ещё
   root:
     password: "$6$ЗАМЕНИТЕ$НА_ХЭШ_ПАРОЛЯ"
 
