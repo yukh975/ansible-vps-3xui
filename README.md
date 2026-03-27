@@ -52,9 +52,12 @@ ansible-vps/
 │   │   └── configure.yml                 # 3x-ui, Caddy
 │   ├── handlers/main.yml                 # restart sshd, caddy, iptables
 │   ├── templates/sshd_config.j2          # Шаблон sshd_config
+│   ├── templates/iptables_v4.j2          # Шаблон правил IPv4
+│   ├── templates/iptables_v6.j2          # Шаблон правил IPv6
+│   └── templates/Caddyfile.j2            # Шаблон Caddyfile
 │   └── files/                            # Файлы с эталона (в .gitignore)
 │       ├── sysctl.conf
-│       ├── rules.v4 / rules.v6
+│       # rules.v4 / rules.v6 / sysctl.conf / Caddyfile больше не нужны
 │       ├── Caddyfile
 │       ├── x-ui.db
 │       ├── certs/                        # TLS-сертификаты
@@ -118,7 +121,11 @@ certs:
 | `install_caddy` | `true` | Установка Caddy |
 | `xui_version` | `""` (latest) | Версия 3x-ui (`""` = последняя) |
 | `ipset_set_name` | `allowed_hosts` | Имя ipset-set'а |
-| `ipset_hosts` | `[]` | Список IP для ipset-set'а |
+| `ipset_hosts` | `[]` | Список IP — полный доступ через ipset |
+| `allowed_tcp_ports` | `[80, 443]` | TCP-порты открытые для всех |
+| `allowed_udp_ports` | `[]` | UDP-порты открытые для всех |
+| `sysctl_settings` | см. конфиг | Параметры ядра (dict) |
+| `caddy_redirect_url` | `127.0.0.1:2053` | Куда Caddy проксирует запросы |
 
 ---
 

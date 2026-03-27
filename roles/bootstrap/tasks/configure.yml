@@ -122,9 +122,9 @@
     mode: "0755"
   when: install_caddy | default(true)
 
-- name: "[caddy] Доставить Caddyfile"
-  copy:
-    src: "files/Caddyfile"
+- name: "[caddy] Сгенерировать Caddyfile"
+  template:
+    src: Caddyfile.j2
     dest: /etc/caddy/Caddyfile
     owner: root
     group: root

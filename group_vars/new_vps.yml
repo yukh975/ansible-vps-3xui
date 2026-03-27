@@ -76,6 +76,8 @@ xui_db_dest: "/etc/x-ui/x-ui.db"
 
 # ── Caddy ────────────────────────────────────────────────────────────────────
 install_caddy: true                 # false = пропустить установку Caddy
+# URL куда Caddy проксирует входящие HTTPS-запросы (3x-ui слушает локально)
+caddy_redirect_url: "127.0.0.1:2053"
 
 # ── Пакеты ───────────────────────────────────────────────────────────────────
 extra_packages:
@@ -96,15 +98,44 @@ extra_packages:
   - telnet
   - traceroute
 
-# ── Файлы конфигурации ──────────────────────────────────────────────────────
-sysctl_src: "files/sysctl.conf"
+# ── sysctl ────────────────────────────────────────────────────────────────────
+# Параметры ядра. Ansible применяет каждый через модуль sysctl
+# и записывает в sysctl_dest (персистентно через sysctl --system).
 sysctl_dest: "/etc/sysctl.d/99-custom.conf"
+sysctl_settings:
+  # TCP hardening
+  net.ipv4.tcp_syncookies: 1
+  net.ipv4.tcp_fin_timeout: 15
+  net.ipv4.tcp_keepalive_time: 300
+  net.ipv4.tcp_keepalive_probes: 5
+  net.ipv4.tcp_keepalive_intvl: 15
+  # Защита от spoofing
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.conf.default.rp_filter: 1
+  # Не форвардить пакеты (не роутер)
+  net.ipv4.ip_forward: 0
+  net.ipv6.conf.all.forwarding: 0
+  # Игнорировать broadcast ping
+  net.ipv4.icmp_echo_ignore_broadcasts: 1
+  # Очередь соединений
+  net.core.somaxconn: 1024
+  net.ipv4.tcp_max_syn_backlog: 2048
 
-iptables_rules_v4_src: "files/rules.v4"
+# ── iptables ──────────────────────────────────────────────────────────────────
+# Правила генерируются из шаблона templates/iptables_v4.j2 / iptables_v6.j2.
+# Правила для SSH-порта и ipset-сета подставляются автоматически.
+#
+# allowed_tcp_ports — дополнительные TCP-порты открытые для всех
+# allowed_udp_ports — дополнительные UDP-порты открытые для всех
 iptables_rules_v4_dest: "/etc/iptables/rules.v4"
-
-iptables_rules_v6_src: "files/rules.v6"
 iptables_rules_v6_dest: "/etc/iptables/rules.v6"
+
+allowed_tcp_ports:
+  - 80    # HTTP (Caddy)
+  - 443   # HTTPS (Caddy)
+
+allowed_udp_ports: []
+  # - 51820  # WireGuard (пример)
 
 # ── ipset ────────────────────────────────────────────────────────────────────
 # Ansible создаст set типа hash:ip с именем ipset_set_name и добавит

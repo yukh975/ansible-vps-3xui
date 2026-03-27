@@ -84,23 +84,13 @@ scp $ETALON:/home/$DEPLOY_USER/.bashrc roles/bootstrap/files/$DEPLOY_USER/.bashr
 scp $ETALON:/root/.bashrc              roles/bootstrap/files/root/.bashrc
 ```
 
-**Системные конфиги:**
-```bash
-scp $ETALON:/etc/sysctl.d/99-custom.conf   roles/bootstrap/files/sysctl.conf
-ssh $ETALON "iptables-save"   > roles/bootstrap/files/rules.v4
-ssh $ETALON "ip6tables-save"  > roles/bootstrap/files/rules.v6
-# ipset — адреса задаются в group_vars/new_vps.yml (ipset_friends), файл не нужен
-```
-
 **3x-ui база данных:**
 ```bash
 scp $ETALON:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 ```
 
-**Caddy конфиг:**
-```bash
-scp $ETALON:/etc/caddy/Caddyfile roles/bootstrap/files/Caddyfile
-```
+> **sysctl, iptables, ipset, Caddyfile** с эталона копировать не нужно —
+> всё генерируется из переменных в `group_vars/new_vps.yml`.
 
 **TLS-сертификаты:**
 ```bash
@@ -131,6 +121,10 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 | `ssh_port` | `275` |
 | `deploy_user` | `yukh` |
 | `users.*.password` | Хэш SHA-512 (см. ниже) |
+| `ipset_hosts` | Список доверенных IP (полный доступ) |
+| `allowed_tcp_ports` | Порты открытые для всех (`80`, `443`, ...) |
+| `caddy_redirect_url` | Куда Caddy проксирует запросы (`127.0.0.1:2053`) |
+| `sysctl_settings` | Параметры ядра (можно оставить по умолчанию) |
 
 **Сгенерировать хэши паролей:**
 ```bash

@@ -157,17 +157,16 @@
 
 # ── sysctl ────────────────────────────────────────────────────────────────────
 
-- name: "[sysctl] Доставить конфиг"
-  copy:
-    src: "{{ sysctl_src }}"
-    dest: "{{ sysctl_dest }}"
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: "[sysctl] Применить"
-  command: sysctl --system
-  changed_when: false
+- name: "[sysctl] Применить параметры"
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value | string }}"
+    state: present
+    reload: yes
+    sysctl_file: "{{ sysctl_dest }}"
+  loop: "{{ sysctl_settings | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
 
 # ── ipset ─────────────────────────────────────────────────────────────────────
 
@@ -207,28 +206,28 @@
     group: root
     mode: "0750"
 
-- name: "[iptables] Доставить правила IPv4"
-  copy:
-    src: "{{ iptables_rules_v4_src }}"
+- name: "[iptables] Сгенерировать rules.v4"
+  template:
+    src: iptables_v4.j2
     dest: "{{ iptables_rules_v4_dest }}"
     owner: root
     group: root
     mode: "0640"
 
-- name: "[iptables] Доставить правила IPv6"
-  copy:
-    src: "{{ iptables_rules_v6_src }}"
+- name: "[iptables] Сгенерировать rules.v6"
+  template:
+    src: iptables_v6.j2
     dest: "{{ iptables_rules_v6_dest }}"
     owner: root
     group: root
     mode: "0640"
 
 - name: "[iptables] Применить правила IPv4"
-  shell: iptables-restore < /etc/iptables/rules.v4
+  shell: "iptables-restore < {{ iptables_rules_v4_dest }}"
   changed_when: true
 
 - name: "[iptables] Применить правила IPv6"
-  shell: ip6tables-restore < /etc/iptables/rules.v6
+  shell: "ip6tables-restore < {{ iptables_rules_v6_dest }}"
   changed_when: true
 
 - name: "[iptables] netfilter-persistent save"
