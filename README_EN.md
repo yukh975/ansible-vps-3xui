@@ -11,8 +11,10 @@ Takes a freshly installed Debian 12/13 with root SSH access and turns it into a 
 Full step-by-step instructions: **[INSTALL_EN.md](INSTALL_EN.md)**
 
 ```
-Step 1 — once (locally): clone the repo, configure vars, copy x-ui.db from reference server
-Step 2 — per new server: run site-init.yml, then site-configure.yml
+Step 1 — environment setup and node preparation:
+         clone repo, configure vars, copy x-ui.db → site-init.yml
+Step 2 — node configuration:
+         site-configure.yml
 ```
 
 ---
