@@ -1,7 +1,5 @@
 # Инструкция по развёртыванию
 
-## Общая схема
-
 ```
 Часть A  — один раз, при первой установке проекта
 Часть B  — для каждого нового сервера
@@ -11,7 +9,16 @@
 
 ## Часть A. Первоначальная настройка (один раз)
 
-### A1. Установить Ansible
+### A1. Клонировать репозиторий
+
+```bash
+git clone https://github.com/yukh975/ansible-newvps-3xui.git ansible-vps
+cd ansible-vps
+```
+
+---
+
+### A2. Установить Ansible
 
 **macOS:**
 ```bash
@@ -30,59 +37,23 @@ ansible --version
 
 ---
 
-### A2. Сгенерировать SSH-ключ для Ansible (если нет)
+### A3. Сгенерировать SSH-ключ (если нет)
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C "ansible"
 ```
 
----
-
-### A3. Создать файл переменных
-
-```bash
-cp group_vars/new_vps.yml.example group_vars/new_vps.yml
-```
-
-Открыть `group_vars/new_vps.yml` и заполнить:
-
-| Параметр | Что вписать |
-|---|---|
-| `hostname` | FQDN сервера, например `vps1.example.com` |
-| `domain` | Домен, например `example.com` |
-| `ssh_port` | SSH-порт после hardening (например `275`) |
-| `deploy_user` | Имя пользователя, от которого работает этап 2 |
-| `acme_email` | Email для Let's Encrypt |
-| `certs_dest_dir` | Путь к сертификатам (должен совпадать с x-ui.db!) |
-| `caddy_https_port` | HTTPS-порт Caddy (8443 по умолчанию, т.к. 443 занят 3x-ui) |
-| `caddy_redirect_url` | Куда Caddy проксирует запросы (обычно `127.0.0.1:2053`) |
-| `users.*.password` | Хэши паролей SHA-512 (см. ниже) |
-| `users.*.ssh_public_keys` | Публичные SSH-ключи (см. ниже) |
-| `ipset_hosts` | Список доверенных IP с полным доступом |
-| `allowed_tcp_ports` | Открытые TCP-порты (80, 443, 8443 по умолчанию) |
-
-**SSH-ключи — вставить прямо в конфиг:**
+Сразу посмотреть публичный ключ — он понадобится в конфиге:
 ```bash
 cat ~/.ssh/id_ed25519.pub
-```
-Скопировать вывод в `users.<user>.ssh_public_keys`.
-
-**Сгенерировать хэш пароля:**
-```bash
-openssl passwd -6 'ВАШ_ПАРОЛЬ'
-```
-
-**Опционально — зашифровать файл vault'ом:**
-```bash
-ansible-vault encrypt group_vars/new_vps.yml
-# При каждом запуске playbook добавлять: --ask-vault-pass
 ```
 
 ---
 
 ### A4. Скопировать x-ui.db с эталонного сервера
 
-Это единственный файл, который нужно взять с эталона:
+Это **единственный файл**, который берётся с эталонного сервера.
+В нём хранятся инбаунды и настройки TLS.
 
 ```bash
 mkdir -p roles/bootstrap/files/
@@ -92,7 +63,99 @@ scp root@<IP_ЭТАЛОНА>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 > **Важно про `certs_dest_dir`:**
 > Путь, куда cert-sync кладёт сертификаты, **должен совпадать** с настройками TLS
 > в `x-ui.db` (раздел TLS в настройках инбаунда).
-> Если меняете `certs_dest_dir` — обновите и в 3X-UI на эталоне.
+> По умолчанию: `/etc/ssl/<domain>`. Если меняете — обновите и в 3X-UI на эталоне.
+
+---
+
+### A5. Создать файл переменных
+
+```bash
+cp group_vars/new_vps.yml.example group_vars/new_vps.yml
+```
+
+Открыть `group_vars/new_vps.yml` и заполнить все параметры:
+
+#### Обязательные параметры
+
+| Параметр | Описание |
+|---|---|
+| `hostname` | FQDN сервера, например `vps1.example.com` |
+| `domain` | Домен для ACME-сертификата, например `example.com` |
+| `ssh_port` | SSH-порт после hardening (не 22) |
+| `deploy_user` | Имя пользователя для этапа 2 — **должен быть в `users`** |
+| `acme_email` | Email для регистрации в Let's Encrypt |
+| `certs_dest_dir` | Путь к сертификатам — **должен совпадать с `x-ui.db`!** |
+| `users.<name>.password` | SHA-512 хэш пароля пользователя |
+| `users.<name>.ssh_public_keys` | Список публичных SSH-ключей (минимум один) |
+
+#### Дополнительные параметры пользователей
+
+| Параметр | По умолчанию | Описание |
+|---|---|---|
+| `users.<name>.groups` | `[]` | Группы Linux, например `["sudo"]` |
+| `users.<name>.sudo_nopasswd` | `false` | NOPASSWD в sudoers |
+| `users.<name>.has_bashrc` | `false` | Копировать `.bashrc` из `files/<name>/.bashrc` |
+
+#### Параметры сервисов
+
+| Параметр | По умолчанию | Описание |
+|---|---|---|
+| `caddy_https_port` | `8443` | HTTPS-порт Caddy |
+| `caddy_redirect_url` | `127.0.0.1:2053` | Куда Caddy проксирует запросы |
+| `install_3xui` | `true` | Устанавливать 3x-ui |
+| `install_caddy` | `true` | Устанавливать Caddy |
+| `xui_version` | `""` (latest) | Версия 3x-ui, например `2.3.11` |
+
+#### Параметры firewall
+
+| Параметр | По умолчанию | Описание |
+|---|---|---|
+| `ipset_hosts` | `[]` | Доверенные IP с полным доступом |
+| `ipset_set_name` | `allowed_hosts` | Имя ipset-сета |
+| `allowed_tcp_ports` | `[80, 443, 8443]` | Открытые TCP-порты |
+| `allowed_udp_ports` | `[]` | Открытые UDP-порты |
+
+---
+
+#### Как заполнять
+
+**SSH-ключи** — вставить прямо в конфиг, можно несколько:
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+```yaml
+users:
+  myuser:
+    ssh_public_keys:
+      - "ssh-ed25519 AAAA...ключ_ansible... ansible"
+      - "ssh-ed25519 AAAA...личный_ключ... personal-laptop"   # опционально
+```
+
+**Хэш пароля** — сгенерировать локально:
+```bash
+openssl passwd -6 'ВАШ_ПАРОЛЬ'
+```
+
+**`.bashrc`** — если нужны алиасы и кастомный промпт:
+```bash
+# Создать файл для нужного пользователя
+mkdir -p roles/bootstrap/files/myuser/
+nano roles/bootstrap/files/myuser/.bashrc
+```
+Затем в конфиге: `has_bashrc: true`.
+
+---
+
+### A6. (Опционально) Зашифровать конфиг через ansible-vault
+
+```bash
+ansible-vault encrypt group_vars/new_vps.yml
+```
+
+При каждом запуске playbook добавлять флаг:
+```bash
+ansible-playbook ... --ask-vault-pass
+```
 
 ---
 
@@ -136,20 +199,20 @@ cp inventory.ini.example inventory.ini
 
 ```bash
 ansible-playbook -i inventory.ini site-init.yml
+# с vault:
+ansible-playbook -i inventory.ini site-init.yml --ask-vault-pass
 ```
-
-С vault: `ansible-playbook -i inventory.ini site-init.yml --ask-vault-pass`
 
 Что происходит:
 1. `apt full-upgrade` (если есть обновления — перезагрузка)
 2. Установка пакетов из `extra_packages`
 3. Создание пользователей, SSH-ключи из конфига, sudoers
-4. Hostname
+4. Установка hostname
 5. SSH hardening: кастомный порт, root закрыт, только ключи
 6. sysctl, ipset, iptables
 7. Перезагрузка → SSH поднимается на `ssh_port`
 
-⚠️ **После этого шага этап 1 больше нельзя запустить повторно** — SSH на 22 закрыт, root закрыт.
+⚠️ **После этого шага этап 1 нельзя запустить повторно** — SSH на 22 закрыт, root закрыт.
 
 ---
 
@@ -157,6 +220,8 @@ ansible-playbook -i inventory.ini site-init.yml
 
 ```bash
 ansible-playbook -i inventory.ini site-configure.yml
+# с vault:
+ansible-playbook -i inventory.ini site-configure.yml --ask-vault-pass
 ```
 
 Что происходит:
