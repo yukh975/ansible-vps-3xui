@@ -114,6 +114,9 @@ sysctl_settings:
   # Очередь соединений
   net.core.somaxconn: 1024
   net.ipv4.tcp_max_syn_backlog: 2048
+  # BBR — обязательно для 3x-ui
+  net.core.default_qdisc: fq
+  net.ipv4.tcp_congestion_control: bbr
 
 # ── iptables ──────────────────────────────────────────────────────────────────
 # Правила генерируются из шаблона templates/iptables_v4.j2 / iptables_v6.j2.
