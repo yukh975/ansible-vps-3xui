@@ -169,6 +169,18 @@ ansible-vault encrypt group_vars/new_vps.yml
 ansible-playbook ... --ask-vault-pass
 ```
 
+Для внесения изменений — расшифровать, отредактировать, зашифровать обратно:
+```bash
+ansible-vault decrypt group_vars/new_vps.yml
+nano group_vars/new_vps.yml
+ansible-vault encrypt group_vars/new_vps.yml
+```
+
+Или редактировать не расшифровывая (откроет в $EDITOR):
+```bash
+ansible-vault edit group_vars/new_vps.yml
+```
+
 ---
 
 > ✅ **Шаг 1 выполнен.** При развёртывании следующих серверов начинайте с Шага 2.
