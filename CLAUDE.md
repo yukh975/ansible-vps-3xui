@@ -41,6 +41,11 @@ After final reboot: stop x-ui → wait for Caddy cert (up to 5 min) → run cert
 
 Variables removed in v0.9.0: `domain` (replaced by `hostname`), `install_caddy` (Caddy is now mandatory).
 
+## Package Installation Notes
+
+- `ipset-persistent` must be in `extra_packages` — provides the `10-ipsets` plugin for `netfilter-persistent`, which saves/restores ipset sets before iptables rules on boot (plugin order: 10-ipsets → 15-ip4tables → 25-ip6tables).
+- apt task uses `DEBIAN_FRONTEND=noninteractive` — `ipset-persistent` asks an interactive question during install ("save current rules?") which would block Ansible without this.
+
 ## No ansible.posix Dependency
 
 All modules are `ansible.builtin`. Removed in v0.8.0:

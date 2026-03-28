@@ -27,6 +27,8 @@
   apt:
     name: "{{ extra_packages }}"
     state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
 
 # ── Пользователи (цикл, кроме root) ─────────────────────────────────────────
 
