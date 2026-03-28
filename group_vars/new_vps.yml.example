@@ -81,16 +81,13 @@ caddy_listen_port: 4443
 caddy_fallback_url: "https://example.com"
 
 # ── Пакеты ───────────────────────────────────────────────────────────────────
+# Дополнительные пакеты (по желанию).
+# Обязательные пакеты (iptables, ipset, ipset-persistent, netfilter-persistent, sqlite3)
+# устанавливаются автоматически — дублировать не нужно.
 extra_packages:
   - sudo
-  - iptables
-  - iptables-persistent
-  - ipset
-  - ipset-persistent
-  - netfilter-persistent
   - curl
   - wget
-  - sqlite3
   - unzip
   - ca-certificates
   - gnupg

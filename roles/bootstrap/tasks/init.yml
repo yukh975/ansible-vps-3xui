@@ -23,7 +23,20 @@
     update_cache: yes
     cache_valid_time: 3600
 
-- name: "[pkg] Установить необходимые пакеты"
+- name: "[pkg] Установить обязательные пакеты"
+  apt:
+    name:
+      - iptables
+      - iptables-persistent
+      - ipset
+      - ipset-persistent
+      - netfilter-persistent
+      - sqlite3
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: "[pkg] Установить дополнительные пакеты"
   apt:
     name: "{{ extra_packages }}"
     state: present
