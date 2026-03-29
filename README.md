@@ -170,6 +170,9 @@ roles/bootstrap/templates/iptables_v6.j2
 | `sysctl_settings` | см. конфиг | Параметры ядра |
 | `extra_packages` | см. конфиг | Дополнительные пакеты |
 
+> **Следующие пакеты устанавливаются автоматически** — не нужно добавлять их в `extra_packages`:
+> `iptables`, `iptables-persistent`, `ipset`, `ipset-persistent`, `netfilter-persistent`, `sqlite3`
+
 ---
 
 ## Порты
