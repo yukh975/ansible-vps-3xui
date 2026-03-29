@@ -129,10 +129,19 @@ acme_email: "admin@example.com"          # email for Let's Encrypt
 certs_dest_dir: "/etc/ssl/{{ hostname }}"  # where cert-sync places the certificates
 ```
 
-> Ansible automatically updates the certificate paths in `x-ui.db` after copying it —
+> Ansible automatically updates the **panel** certificate paths in `x-ui.db` after copying it —
 > no changes needed on the reference server.
 
+> **Inbound TLS certificates** — if any 3X-UI inbounds use TLS certificates (separate from the panel
+> certificate), they are **not copied automatically**. After deployment you must manually upload them
+> to the server and verify the paths and file permissions in the inbound settings.
+
 ### Caddy
+
+Caddy serves two purposes:
+
+1. **SSL certificate** — obtains a certificate for `hostname` via Let's Encrypt (HTTP-01 challenge on port 80) and syncs it to `certs_dest_dir` for use by x-ray/3x-ui.
+2. **Fallback URL** — receives non-VPN traffic from x-ray (on `127.0.0.1:caddy_listen_port`) and redirects to `caddy_fallback_url`. This address is set as the Fallback URL in 3X-UI inbound settings.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -168,6 +177,9 @@ Default policies (`INPUT DROP`, `FORWARD DROP`, `OUTPUT ACCEPT`), loopback, ESTA
 | `xui_version` | `""` (latest) | 3x-ui version |
 | `sysctl_settings` | see config | Kernel parameters |
 | `extra_packages` | see config | Additional packages |
+
+> **The following packages are installed automatically** — no need to add them to `extra_packages`:
+> `iptables`, `iptables-persistent`, `ipset`, `ipset-persistent`, `netfilter-persistent`, `sqlite3`
 
 ---
 
