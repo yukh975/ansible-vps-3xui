@@ -85,6 +85,9 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 nano group_vars/new_vps.yml
 ```
 
+> 💡 **Разворачиваете сразу несколько серверов?**
+> `group_vars/new_vps.yml` содержит **общие** переменные для всех хостов в группе (пользователи, ssh_port, пакеты, sysctl). Индивидуальные параметры (как минимум `hostname` — для ACME-сертификата) выносятся в `host_vars/<имя_хоста>.yml`. См. раздел «Развёртывание на несколько серверов» в [README.md](README.md) и шаблон `host_vars/server1.yml.example`.
+
 #### Обязательные параметры
 
 | Параметр | Описание |
@@ -232,6 +235,8 @@ nano inventory.ini   # вписать IP сервера вместо YOUR_SERVER
 ```
 
 Один `inventory.ini` работает для обоих этапов.
+
+> 💡 **Несколько серверов сразу?** Добавьте строки в секцию `[new_vps]` и создайте `host_vars/<host>.yml` для каждого (с уникальным `hostname`). Ansible развернёт параллельно. Подробности — в [README.md](README.md).
 
 ---
 

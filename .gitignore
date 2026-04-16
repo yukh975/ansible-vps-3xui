@@ -9,3 +9,7 @@ inventory.ini
 roles/bootstrap/files/*
 !roles/bootstrap/files/.gitkeep
 group_vars/new_vps.yml
+
+# Переменные конкретных хостов (шаблоны *.example коммитятся)
+host_vars/*.yml
+!host_vars/*.yml.example

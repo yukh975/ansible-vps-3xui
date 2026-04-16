@@ -1,13 +1,35 @@
 # =============================================================================
-# inventory.ini — список серверов
-# Скопировать в inventory.ini и заполнить
+# inventory.ini — server list
+# Copy to inventory.ini and fill in your values
 # =============================================================================
 #
-# Порт и пользователь для каждого этапа задаются в site-init.yml / site-configure.yml,
-# поэтому inventory содержит только адреса серверов и ключ SSH.
+# Port and user for each stage are set in site-init.yml / site-configure.yml,
+# so this file contains only server addresses and the SSH key.
+#
+# ── Host name in inventory vs ansible_host ───────────────────────────────────
+# Left column ("server1", "vps-fr", ...) is the logical Ansible host name.
+# It is used by host_vars/<name>.yml for per-host overrides — so pick a
+# meaningful identifier, not the IP.
 
+# ── Single server ────────────────────────────────────────────────────────────
 [new_vps]
 server1 ansible_host=YOUR_SERVER_IP
+
+# ── Multiple servers ─────────────────────────────────────────────────────────
+# Ansible configures all hosts in the group in parallel (default: 5 at a time,
+# tune via `forks` in ansible.cfg or `-f N` on the command line).
+#
+# For each server create host_vars/<host>.yml with per-host overrides — at
+# minimum a unique `hostname`, because Caddy obtains a separate TLS certificate
+# per FQDN. See host_vars/server1.yml.example for the template.
+#
+# [new_vps]
+# server1 ansible_host=1.2.3.4
+# server2 ansible_host=5.6.7.8
+# server3 ansible_host=9.10.11.12
+#
+# Common variables (ssh_port, users, acme_email, extra_packages, sysctl, ...)
+# stay in group_vars/new_vps.yml — they apply to every host in the group.
 
 [new_vps:vars]
 ansible_ssh_private_key_file=~/.ssh/id_ed25519

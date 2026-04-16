@@ -16,14 +16,14 @@ Target OS: Debian 12/13. Managed from macOS or Linux (Ansible control node).
 ### Traffic flow
 
 - Caddy listens on 443 (TLS via ACME, port 80 for HTTP-01 challenge)
+- `xui_panel_path/*` → reverse proxy → `localhost:xui_panel_port` (x-ui panel, HTTP)
 - `xray_ws_path/*` → WebSocket proxy → `localhost:xray_port` (xray/VPN traffic)
 - All other traffic → redirect to `caddy_fallback_url` (camouflage site)
-- cert-sync.sh copies certs from Caddy storage to `certs_dest_dir` for x-ui panel, then restarts x-ui
-- cert-sync runs via ExecStartPost with root privileges (`+` prefix in systemd drop-in)
+- x-ui panel runs on localhost HTTP only — TLS terminates at Caddy, no cert-sync needed
 
 ### Post-reboot sequence (configure.yml)
 
-After final reboot: stop x-ui → wait for Caddy cert (up to 5 min) → run cert-sync → start x-ui. Playbook only completes when both x-ui and Caddy are active.
+After final reboot: wait for Caddy to obtain ACME certificate (up to 5 min) → start x-ui. Playbook only completes when both x-ui and Caddy are active.
 
 ## Key Variables
 
@@ -33,8 +33,9 @@ After final reboot: stop x-ui → wait for Caddy cert (up to 5 min) → run cert
 | `ssh_port` | — | SSH port after hardening |
 | `deploy_user` | — | User for stage 2 (must be in `users`) |
 | `acme_email` | — | Email for Let's Encrypt |
-| `certs_dest_dir` | — | Directory where cert-sync places certificates for x-ui panel |
 | `caddy_fallback_url` | — | External camouflage site |
+| `xui_panel_path` | — | Secret path to x-ui panel (starts with `/`; `*` appended in template) |
+| `xui_panel_port` | `54321` | x-ui panel port on localhost (reverse-proxied via Caddy) |
 | `xray_ws_path` | — | Secret WebSocket path for xray (starts with `/`; `*` appended in template) |
 | `xray_port` | `10000` | xray WebSocket port on localhost |
 | `install_3xui` | `true` | Install 3x-ui |
@@ -55,16 +56,28 @@ All modules are `ansible.builtin`. Removed in v0.8.0:
 
 No `requirements.yml` needed.
 
+## Multi-Server Deployment
+
+Supported natively via Ansible's group/host vars. Layout:
+
+- `group_vars/new_vps.yml` — shared across all hosts in the group (users, ssh_port, acme_email, packages, sysctl, firewall)
+- `host_vars/<host>.yml` — per-host overrides. **`hostname` must be per-host** — each server gets its own TLS certificate from Let's Encrypt via HTTP-01; two hosts can't share one FQDN without DNS-01 (not implemented).
+- `inventory.ini` lists all hosts in `[new_vps]`; left column (e.g. `server1`) must match the `host_vars/<name>.yml` filename.
+
+Ansible runs hosts in parallel (default 5 forks). Preconditions: SSH key pre-uploaded to each root (`ssh-copy-id`), DNS A-record per FQDN, same `x-ui.db` for all.
+
 ## Important Files
 
 - `group_vars/new_vps.yml` — not committed (`.gitignore`); contains secrets (password hashes, SSH keys)
 - `group_vars/new_vps.yml.example` — template, committed to git
+- `host_vars/<host>.yml` — not committed (`.gitignore`); per-host vars, at minimum `hostname`
+- `host_vars/server1.yml.example` — template, committed
 - `roles/bootstrap/files/x-ui.db` — not committed (`.gitignore`); copy from reference server with `scp root@<IP>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db`
 - `roles/bootstrap/files/.gitkeep` — keeps the `files/` directory in git
 
 ## Database Path Updates
 
-After uploading `x-ui.db`, an Ansible sqlite3 task automatically updates `webCertFile` and `webKeyFile` in the database using `certs_dest_dir` and `hostname`. Inbound TLS paths must be checked manually in the x-ui panel.
+After uploading `x-ui.db`, an Ansible sqlite3 task automatically clears `webCertFile` and `webKeyFile` (TLS is handled by Caddy), sets `webListen` to `127.0.0.1`, and sets `webBasePath` to `xui_panel_path`. Inbound TLS paths must be checked manually in the x-ui panel.
 
 ## Testing / Idempotency
 

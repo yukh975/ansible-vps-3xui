@@ -4,6 +4,9 @@
 # =============================================================================
 
 # ── Server ────────────────────────────────────────────────────────────────────
+# NOTE: For multi-server deployments move `hostname` to host_vars/<host>.yml —
+# each server needs its own FQDN (Caddy obtains a separate TLS certificate
+# per FQDN). See host_vars/server1.yml.example.
 hostname: "vps1.example.com"        # Server FQDN (used for hostname and ACME certificate)
 
 # ── SSH ───────────────────────────────────────────────────────────────────────

@@ -85,6 +85,9 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 nano group_vars/new_vps.yml
 ```
 
+> 💡 **Deploying multiple servers at once?**
+> `group_vars/new_vps.yml` holds the **shared** variables for every host in the group (users, ssh_port, packages, sysctl). Per-host values (at minimum `hostname` — for the ACME certificate) go into `host_vars/<host>.yml`. See the "Multi-Server Deployment" section in [README_EN.md](README_EN.md) and the `host_vars/server1.yml.example` template.
+
 #### Required parameters
 
 | Parameter | Description |
@@ -232,6 +235,8 @@ nano inventory.ini   # replace YOUR_SERVER_IP with the actual server IP
 ```
 
 One `inventory.ini` works for both stages.
+
+> 💡 **Multiple servers at once?** Add more lines to the `[new_vps]` section and create `host_vars/<host>.yml` for each (with a unique `hostname`). Ansible deploys in parallel. Details in [README_EN.md](README_EN.md).
 
 ---
 

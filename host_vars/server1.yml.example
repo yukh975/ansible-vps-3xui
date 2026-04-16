@@ -1,0 +1,34 @@
+---
+# =============================================================================
+# host_vars/<host>.yml — per-host variables
+# Filename must match the host name from inventory.ini (left column),
+# NOT the IP address. Example: inventory has "server1 ansible_host=1.2.3.4",
+# then this file should be host_vars/server1.yml.
+# =============================================================================
+#
+# When deploying multiple servers, keep shared variables (users, ssh_port,
+# acme_email, extra_packages, sysctl, ...) in group_vars/new_vps.yml, and
+# put per-host overrides here.
+#
+# `hostname` MUST be unique per server — Caddy obtains a separate TLS
+# certificate per FQDN via Let's Encrypt. Two servers cannot share one FQDN
+# without DNS-01 challenge (not supported by this playbook).
+#
+# Everything not defined here is inherited from group_vars/new_vps.yml.
+
+hostname: "vps1.example.com"
+
+# ── Optional per-host overrides ──────────────────────────────────────────────
+# If you want different secret paths per server (e.g. separate panels for
+# different customers), uncomment and customize. Otherwise the values from
+# group_vars/new_vps.yml apply.
+#
+# xui_panel_path: "/server1-secret-panel"
+# xray_ws_path: "/server1-secret-ws"
+#
+# Different SSH port per server:
+# ssh_port: 2275
+#
+# Different trusted IPs per server:
+# ipset_hosts:
+#   - "1.2.3.4"
