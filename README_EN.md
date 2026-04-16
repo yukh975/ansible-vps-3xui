@@ -4,6 +4,9 @@ Ansible playbook for rapid deployment of a VPS node with 3x-ui and Caddy.
 
 Takes a freshly installed Debian 12/13 with root SSH access and turns it into a production-ready node in two stages: hardened SSH, firewall, users, [3x-ui](https://github.com/MHSanaei/3x-ui) with a database from a reference server, and Caddy as a reverse proxy with automatic TLS certificates via Let's Encrypt.
 
+> ⚠️ **This playbook targets xray VLESS + WebSocket.**
+> Caddy on port 443 proxies WebSocket traffic at a secret path to xray (`localhost:xray_port`). This works for VLESS/VMess/Trojan with the `ws` (WebSocket) transport. Other transports (TCP, Reality, gRPC, mKCP, QUIC, xHTTP, etc.) will not pass through this reverse proxy — they need a different architecture (for example xray listening on 443 directly, without Caddy).
+
 ---
 
 ## Quick Start
@@ -153,7 +156,8 @@ hostname: "vps3.example.com"
 
 - The same SSH key uploaded to every server beforehand (`ssh-copy-id root@<IP>` for each IP)
 - For each FQDN, a DNS A-record pointing to the corresponding server IP
-- `x-ui.db` is identical for all servers — usually what you want for a farm of identical nodes
+
+> **About `x-ui.db`:** the project always has exactly one `roles/bootstrap/files/x-ui.db`, and it gets rolled out to every server in the group — this is by design, a farm receives identical inbounds. If you need different inbounds per server, configure them manually in the panel after deployment (or split the servers into different groups with separate DB files).
 
 ### When servers are genuinely different
 

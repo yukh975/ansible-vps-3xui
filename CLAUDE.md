@@ -6,6 +6,8 @@ Ansible playbook for deploying VPS nodes with 3x-ui and Caddy.
 
 Target OS: Debian 12/13. Managed from macOS or Linux (Ansible control node).
 
+**Supported xray transport: VLESS/VMess/Trojan over WebSocket only.** Caddy on 443 reverse-proxies the WebSocket path to `localhost:xray_port`. Other transports (TCP, Reality, gRPC, mKCP, QUIC, xHTTP) do not work with this setup — they require a different architecture (e.g. xray listening on 443 directly without Caddy).
+
 ## Architecture
 
 ### Two-stage deployment
