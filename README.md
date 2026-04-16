@@ -42,7 +42,7 @@ Ansible playbook для быстрого развёртывания VPS-ноды
 Что делает:
 - Установка 3x-ui + загрузка `x-ui.db`
 - Установка Caddy + деплой Caddyfile
-- Деплой `cert-sync.sh` (автосинхронизация сертификатов)
+- Деплой `cert-sync.sh` (копирует сертификат Caddy в `certs_dest_dir` для панели x-ui)
 - Финальная перезагрузка → Caddy получает TLS-сертификат через Let's Encrypt
 
 > **После успешного развёртывания** `deploy_user` больше не нужен. Рекомендуется удалить его вручную:
@@ -51,14 +51,18 @@ Ansible playbook для быстрого развёртывания VPS-ноды
 > sudo rm -f /etc/sudoers.d/<deploy_user>
 > ```
 
-### Управление сертификатами (автоматически)
+### Схема трафика
 
 ```
-Let's Encrypt → HTTP-01 challenge (порт 80) → Caddy получает cert
-→ cert-sync.sh копирует в /etc/ssl/<домен>/ → x-ui перезапускается
+Клиент → 443 (Caddy, TLS)
+           ├─ путь xray_ws_path/* → localhost:xray_port (xray, WebSocket)
+           └─ всё остальное      → caddy_fallback_url (редирект, камуфляж)
+
+Let's Encrypt → HTTP-01 (порт 80) → Caddy получает сертификат
+→ cert-sync.sh копирует в certs_dest_dir → панель x-ui перезапускается
 ```
 
-При автообновлении (раз в ~60 дней) всё происходит само: Caddy обновляет сертификат → cert-sync срабатывает через systemd `ExecStartPost`.
+При автообновлении сертификата (раз в ~60 дней) Caddy обновляет его сам → cert-sync срабатывает через systemd `ExecStartPost`.
 
 ---
 
@@ -85,7 +89,7 @@ ansible-vps/
 │   │   ├── iptables_v4.j2
 │   │   ├── iptables_v6.j2
 │   │   ├── Caddyfile.j2
-│   │   ├── cert-sync.sh.j2          # Скрипт синхронизации сертов
+│   │   ├── cert-sync.sh.j2          # Скрипт синхронизации сертов для панели x-ui
 │   │   └── caddy-override.conf.j2   # systemd drop-in (ExecStartPost)
 │   └── files/                       # Файлы с эталона (в .gitignore!)
 │       └── x-ui.db                  # единственный файл с эталона
@@ -120,43 +124,47 @@ users:
       - "ssh-ed25519 AAAA... ansible"
       - "ssh-ed25519 AAAA... laptop"   # можно несколько
   root:
-    password: "$6$..."             # нужен файл files/root/.bashrc
+    password: "$6$..."
 ```
 
 ### Сертификаты
 
 ```yaml
 acme_email: "admin@example.com"          # email для Let's Encrypt
-certs_dest_dir: "/etc/ssl/{{ hostname }}"  # куда cert-sync кладёт сертификаты
+certs_dest_dir: "/etc/ssl/{{ hostname }}"  # куда cert-sync кладёт сертификат для панели x-ui
 ```
 
 > Ansible автоматически обновляет пути к сертификатам панели x-ui в `x-ui.db` после заливки —
 > трогать эталонный сервер не нужно.
 
-> **Сертификаты в инбаундах 3X-UI** — если в настройках инбаундов используются TLS-сертификаты
-> (отдельные от сертификата панели), они **не копируются автоматически**. После развёртывания
-> необходимо вручную загрузить их на сервер и проверить пути и права доступа в настройках инбаунда.
+> **Сертификаты в инбаундах 3X-UI** — если в настройках инбаундов используются отдельные
+> TLS-сертификаты, они **не копируются автоматически**. После развёртывания необходимо вручную
+> загрузить их на сервер и проверить пути и права доступа в настройках инбаунда.
 
 ### Caddy
 
-Caddy выполняет две функции:
+Caddy слушает порт 443, получает TLS-сертификат через ACME и управляет трафиком:
 
-1. **SSL-сертификат** — получает сертификат для `hostname` через Let's Encrypt (HTTP-01 challenge на порту 80) и синхронизирует его в `certs_dest_dir` для использования x-ray/3x-ui.
-2. **Fallback URL** — принимает не-VPN трафик от x-ray (на `127.0.0.1:caddy_listen_port`) и редиректит на `caddy_fallback_url`. Этот адрес указывается в настройках инбаунда 3X-UI как Fallback URL.
+- **VPN-трафик** по пути `xray_ws_path` проксируется на xray через WebSocket
+- **Остальной трафик** редиректится на `caddy_fallback_url` (сайт-камуфляж)
+- **Сертификат** синхронизируется в `certs_dest_dir` для панели x-ui
 
-| Переменная | По умолчанию | Описание |
+| Переменная | Пример | Описание |
 |---|---|---|
-| `acme_email` | — | Email для Let's Encrypt (обязательно) |
-| `caddy_https_port` | `8443` | HTTPS-порт Caddy (не 443 — занят x-ray; закрыт снаружи) |
-| `caddy_listen_port` | `4443` | Порт, на который x-ray отправляет fallback-трафик |
-| `caddy_fallback_url` | — | Внешний сайт-камуфляж для fallback-трафика |
+| `acme_email` | `admin@example.com` | Email для Let's Encrypt (обязательно) |
+| `caddy_fallback_url` | `https://example.com` | Сайт-камуфляж для не-VPN трафика |
+| `xray_ws_path` | `/your-secret-path` | Секретный путь WebSocket (начинается с `/`) |
+| `xray_port` | `10000` | Порт xray на localhost (WebSocket) |
+
+> **debug в Caddyfile** — в шаблоне закомментирован. Раскомментировать для отладки,
+> отключить в продакшне — влияет на производительность и объём логов.
 
 ### Firewall
 
 ```yaml
 allowed_tcp_ports:
   - 80    # HTTP (ACME HTTP-01 challenge)
-  - 443   # HTTPS (x-ray инбаунды)
+  - 443   # HTTPS (Caddy + xray через WebSocket)
 
 ipset_set_name: "allowed_hosts"   # имя ipset-сета
 ipset_hosts:                       # полный доступ для этих IP
@@ -187,11 +195,10 @@ roles/bootstrap/templates/iptables_v6.j2
 ## Порты
 
 ```
-22              → только этап 1 (root, временно)
-ssh_port        → SSH после hardening
-80              → Caddy (ACME challenge)
-443             → x-ray (VPN инбаунды)
-127.0.0.1:4443  → Caddy (fallback от x-ray, только localhost)
+22          → только этап 1 (root, временно)
+ssh_port    → SSH после hardening
+80          → Caddy (ACME challenge)
+443         → Caddy (TLS): xray_ws_path/* → xray, остальное → fallback
 ```
 
 ---

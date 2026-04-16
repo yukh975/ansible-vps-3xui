@@ -4,21 +4,24 @@
 {
     # Email для уведомлений Let's Encrypt об истечении сертификата
     email {{ acme_email }}
+    # debug  # Раскомментировать для отладки. Отключить после завершения отладки!
 }
 
-# Порт 80 — обязателен для ACME HTTP-01 challenge (Let's Encrypt обращается сюда).
-# Также принимает обычный HTTP и редиректит на сайт-камуфляж.
-http://{{ hostname }} {
-    redir {{ caddy_fallback_url }}{uri} permanent
-}
+{{ hostname }} {
+    log {
+        output stderr
+        level DEBUG
+    }
 
-# Порт {{ caddy_https_port }} — HTTPS для Caddy (не 443, он занят x-ray).
-# Caddy получает TLS-сертификат и хранит его; cert-sync копирует в certs_dest_dir.
-{{ hostname }}:{{ caddy_https_port }} {
-    redir {{ caddy_fallback_url }}{uri} permanent
-}
+    route {
+        # WebSocket → xray (VPN-трафик по секретному пути)
+        @vless path {{ xray_ws_path }}*
+        reverse_proxy @vless localhost:{{ xray_port }} {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
 
-# Fallback-трафик от x-ray (не-VPN) — редирект на сайт-камуфляж
-http://127.0.0.1:{{ caddy_listen_port | default(4443) }} {
-    redir {{ caddy_fallback_url }}{uri} permanent
+        # Всё остальное — редирект на сайт-камуфляж
+        redir {{ caddy_fallback_url }}{uri} permanent
+    }
 }
