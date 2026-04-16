@@ -1,5 +1,5 @@
-# /etc/iptables/rules.v6 — управляется Ansible, не редактировать вручную
-# Сгенерировано из templates/iptables_v6.j2
+# /etc/iptables/rules.v6 — managed by Ansible, do not edit manually
+# Generated from templates/iptables_v6.j2
 
 *filter
 :INPUT DROP [0:0]
@@ -9,21 +9,21 @@
 # Loopback
 -A INPUT -i lo -j ACCEPT
 
-# Установленные и связанные соединения
+# Established and related connections
 -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
-# ICMPv6 (необходим для нормальной работы IPv6)
+# ICMPv6 (required for proper IPv6 operation)
 -A INPUT -p ipv6-icmp -j ACCEPT
 
 # SSH
 -A INPUT -p tcp --dport {{ ssh_port }} -j ACCEPT
 
-# Дополнительные TCP-порты
+# Additional TCP ports
 {% for port in allowed_tcp_ports | default([]) %}
 -A INPUT -p tcp --dport {{ port }} -j ACCEPT
 {% endfor %}
 
-# Дополнительные UDP-порты
+# Additional UDP ports
 {% for port in allowed_udp_ports | default([]) %}
 -A INPUT -p udp --dport {{ port }} -j ACCEPT
 {% endfor %}

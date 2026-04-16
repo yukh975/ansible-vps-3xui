@@ -1,13 +1,13 @@
 ---
 # =============================================================================
-# site-configure.yml — ЭТАП 2: подключается на кастомном порту от deploy_user
-# Выполняет: установка 3x-ui, Caddy, загрузка БД, финальная перезагрузка
+# site-configure.yml — STAGE 2: connects on ssh_port as deploy_user
+# Performs: 3x-ui install, Caddy, DB upload, final reboot
 #
-# Запуск:
+# Run:
 #   ansible-playbook -i inventory.ini site-configure.yml
 # =============================================================================
 
-- name: "PLAY 3 :: 3x-ui, Caddy, финальная перезагрузка"
+- name: "PLAY 3 :: 3x-ui, Caddy, final reboot"
   hosts: new_vps
   become: true
   gather_facts: true

@@ -1,14 +1,14 @@
 ---
 # =============================================================================
-# site-init.yml — ЭТАП 1: подключается на порту 22 от root
-# Выполняет: обновление ОС, пакеты, пользователи, SSH, sysctl, firewall
-# После завершения SSH переключится на кастомный порт (ssh_port), root будет закрыт
+# site-init.yml — STAGE 1: connects on port 22 as root
+# Performs: OS upgrade, packages, users, SSH, sysctl, firewall
+# After completion SSH moves to custom port (ssh_port), root is locked
 #
-# Запуск:
+# Run:
 #   ansible-playbook -i inventory.ini site-init.yml
 # =============================================================================
 
-- name: "PLAY 1 :: Обновление ОС и перезагрузка"
+- name: "PLAY 1 :: OS upgrade and reboot"
   hosts: new_vps
   become: true
   gather_facts: true
@@ -20,7 +20,7 @@
       vars:
         bootstrap_phase: upgrade
 
-- name: "PLAY 2 :: Пакеты, пользователи, SSH, sysctl, firewall"
+- name: "PLAY 2 :: Packages, users, SSH, sysctl, firewall"
   hosts: new_vps
   become: true
   gather_facts: true

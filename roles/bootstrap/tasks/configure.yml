@@ -1,18 +1,18 @@
 ---
 # =============================================================================
-# Фаза configure: 3x-ui, Caddy + ACME, cert-sync, финальная перезагрузка
-# Работает на порту {{ ssh_port }} от {{ deploy_user }}
+# Phase configure: 3x-ui, Caddy + ACME, final reboot
+# Runs on port {{ ssh_port }} as {{ deploy_user }}
 # =============================================================================
 
 # ── 3x-ui ─────────────────────────────────────────────────────────────────────
 
-- name: "[3xui] Проверить — уже установлен?"
+- name: "[3xui] Check — already installed?"
   stat:
     path: /usr/local/x-ui/x-ui
   register: _xui_binary
   when: install_3xui | default(true)
 
-- name: "[3xui] Установить 3x-ui"
+- name: "[3xui] Install 3x-ui"
   shell: |
     set -euo pipefail
     VER="{{ xui_version | default('') }}"
@@ -29,14 +29,14 @@
     - install_3xui | default(true)
     - not _xui_binary.stat.exists
 
-- name: "[3xui] Остановить x-ui перед заменой БД"
+- name: "[3xui] Stop x-ui before replacing DB"
   systemd:
     name: x-ui
     state: stopped
   ignore_errors: true
   when: install_3xui | default(true)
 
-- name: "[3xui] Создать /etc/x-ui"
+- name: "[3xui] Create /etc/x-ui"
   file:
     path: /etc/x-ui
     state: directory
@@ -45,7 +45,7 @@
     mode: "0750"
   when: install_3xui | default(true)
 
-- name: "[3xui] Залить x-ui.db"
+- name: "[3xui] Upload x-ui.db"
   copy:
     src: "{{ xui_db_src }}"
     dest: "{{ xui_db_dest }}"
@@ -55,7 +55,7 @@
     backup: yes
   when: install_3xui | default(true)
 
-- name: "[3xui] Обновить настройки панели в БД"
+- name: "[3xui] Update panel settings in DB"
   shell: |
     sqlite3 {{ xui_db_dest }} "
       UPDATE settings SET value=''              WHERE key='webCertFile';
@@ -66,7 +66,7 @@
   changed_when: true
   when: install_3xui | default(true)
 
-- name: "[3xui] Включить x-ui в автозагрузку"
+- name: "[3xui] Enable x-ui at startup"
   systemd:
     name: x-ui
     enabled: yes
@@ -75,18 +75,18 @@
 
 # ── Caddy ─────────────────────────────────────────────────────────────────────
 
-- name: "[caddy] Проверить — уже установлен?"
+- name: "[caddy] Check — already installed?"
   stat:
     path: /usr/bin/caddy
   register: _caddy_binary
 
-- name: "[caddy] Установить зависимости"
+- name: "[caddy] Install dependencies"
   apt:
     name: [debian-keyring, debian-archive-keyring, apt-transport-https, curl]
     state: present
   when: not _caddy_binary.stat.exists
 
-- name: "[caddy] Добавить GPG ключ репозитория"
+- name: "[caddy] Add repository GPG key"
   shell: |
     curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
     | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
@@ -95,7 +95,7 @@
     creates: /usr/share/keyrings/caddy-stable-archive-keyring.gpg
   when: not _caddy_binary.stat.exists
 
-- name: "[caddy] Добавить репозиторий"
+- name: "[caddy] Add repository"
   shell: |
     curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
     | tee /etc/apt/sources.list.d/caddy-stable.list
@@ -109,12 +109,12 @@
     update_cache: yes
   when: not _caddy_binary.stat.exists
 
-- name: "[caddy] Установить Caddy"
+- name: "[caddy] Install Caddy"
   apt:
     name: caddy
     state: present
 
-- name: "[caddy] Создать /etc/caddy"
+- name: "[caddy] Create /etc/caddy"
   file:
     path: /etc/caddy
     state: directory
@@ -122,7 +122,7 @@
     group: root
     mode: "0755"
 
-- name: "[caddy] Сгенерировать Caddyfile"
+- name: "[caddy] Generate Caddyfile"
   template:
     src: Caddyfile.j2
     dest: /etc/caddy/Caddyfile
@@ -131,15 +131,15 @@
     mode: "0644"
   notify: restart caddy
 
-- name: "[caddy] Включить Caddy в автозагрузку"
+- name: "[caddy] Enable Caddy at startup"
   systemd:
     name: caddy
     enabled: yes
     daemon_reload: yes
 
-# ── Финальная перезагрузка и ожидание готовности ─────────────────────────────
+# ── Final reboot and readiness wait ───────────────────────────────────────────
 
-- name: "Финальная перезагрузка"
+- name: "Final reboot"
   reboot:
     msg: "Final reboot after full provisioning"
     reboot_timeout: 300
@@ -147,42 +147,42 @@
     pre_reboot_delay: 3
     post_reboot_delay: 30
 
-# Ждём пока Caddy получит сертификат через ACME (до 5 минут)
-- name: "Ждём сертификат от Caddy (ACME)"
+# Wait for Caddy to obtain certificate via ACME (up to 5 minutes)
+- name: "Wait for Caddy certificate (ACME)"
   wait_for:
     path: "/var/lib/caddy/.local/share/caddy/certificates/acme-v02.api.letsencrypt.org-directory/{{ hostname }}/{{ hostname }}.crt"
     timeout: 300
 
-- name: "Запустить x-ui"
+- name: "Start x-ui"
   systemd:
     name: x-ui
     state: started
   when: install_3xui | default(true)
 
-- name: "Проверить статус x-ui"
+- name: "Check x-ui status"
   systemd:
     name: x-ui
   register: _xui_status
   when: install_3xui | default(true)
 
-- name: "Проверить статус caddy"
+- name: "Check caddy status"
   systemd:
     name: caddy
   register: _caddy_status
 
-- name: "=== ГОТОВО ==="
+- name: "=== DONE ==="
   debug:
     msg:
       - "╔══════════════════════════════════════════════════════════╗"
-      - "║   Нода готова к работе                                   ║"
+      - "║   Node is ready                                          ║"
       - "╠══════════════════════════════════════════════════════════╣"
       - "║  IP:      {{ ansible_host }}"
-      - "║  SSH:     порт {{ ssh_port }}, root закрыт"
-      - "║  x-ui:    {{ _xui_status.status.ActiveState | default('не установлен') }}"
+      - "║  SSH:     port {{ ssh_port }}, root locked"
+      - "║  x-ui:    {{ _xui_status.status.ActiveState | default('not installed') }}"
       - "║  caddy:   {{ _caddy_status.status.ActiveState }}"
-      - "║  TLS:     сертификат получен (Caddy)"
+      - "║  TLS:     certificate obtained (Caddy)"
       - "╠══════════════════════════════════════════════════════════╣"
-      - "║  Если Ansible больше не нужен — удалите технического     ║"
-      - "║  пользователя:                                           ║"
+      - "║  If Ansible is no longer needed — delete the technical   ║"
+      - "║  user:                                                   ║"
       - "║  userdel -r {{ deploy_user }}"
       - "╚══════════════════════════════════════════════════════════╝"

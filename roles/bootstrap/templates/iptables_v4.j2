@@ -1,5 +1,5 @@
-# /etc/iptables/rules.v4 — управляется Ansible, не редактировать вручную
-# Сгенерировано из templates/iptables_v4.j2
+# /etc/iptables/rules.v4 — managed by Ansible, do not edit manually
+# Generated from templates/iptables_v4.j2
 
 *filter
 :INPUT DROP [0:0]
@@ -9,24 +9,24 @@
 # Loopback
 -A INPUT -i lo -j ACCEPT
 
-# Установленные и связанные соединения
+# Established and related connections
 -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
 # ICMP
 -A INPUT -p icmp --icmp-type echo-request -j ACCEPT
 
-# ipset: полный доступ для доверенных хостов (set всегда существует, может быть пустым)
+# ipset: full access for trusted hosts (set always exists, may be empty)
 -A INPUT -m set --match-set {{ ipset_set_name | default('allowed_hosts') }} src -j ACCEPT
 
 # SSH
 -A INPUT -p tcp --dport {{ ssh_port }} -j ACCEPT
 
-# Дополнительные TCP-порты
+# Additional TCP ports
 {% for port in allowed_tcp_ports | default([]) %}
 -A INPUT -p tcp --dport {{ port }} -j ACCEPT
 {% endfor %}
 
-# Дополнительные UDP-порты
+# Additional UDP ports
 {% for port in allowed_udp_ports | default([]) %}
 -A INPUT -p udp --dport {{ port }} -j ACCEPT
 {% endfor %}

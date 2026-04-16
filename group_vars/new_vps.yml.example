@@ -1,93 +1,91 @@
 ---
 # =============================================================================
-# group_vars/new_vps.yml — переменные для всех новых нод
+# group_vars/new_vps.yml — variables for all new nodes
 # =============================================================================
 
-# ── Сервер ───────────────────────────────────────────────────────────────────
-hostname: "vps1.example.com"        # FQDN сервера (используется для сертификата и hostname)
+# ── Server ────────────────────────────────────────────────────────────────────
+hostname: "vps1.example.com"        # Server FQDN (used for hostname and ACME certificate)
 
 # ── SSH ───────────────────────────────────────────────────────────────────────
 ssh_port: 275
 
-# ── Основной пользователь ────────────────────────────────────────────────────
-# Имя пользователя, от которого Ansible работает на этапе 2 (после hardening).
-# Должен совпадать с одним из ключей в словаре users ниже.
+# ── Main user ─────────────────────────────────────────────────────────────────
+# Username that Ansible uses in stage 2 (after hardening).
+# Must match one of the keys in the users dict below.
 deploy_user: myuser
 
-# ── Пользователи ─────────────────────────────────────────────────────────────
+# ── Users ─────────────────────────────────────────────────────────────────────
 #
-# Единый словарь всех пользователей, создаваемых на сервере.
-# Каждый пользователь (кроме root) создаётся через модуль user.
+# Single dict of all users to create on the server.
+# Each user (except root) is created via the user module.
 #
-# Пароли хранятся в виде хэша SHA-512.
-# Сгенерировать хэш на control node:
-#   openssl passwd -6 'ВАШ_ПАРОЛЬ'
-# или:
-#   python3 -c "from passlib.hash import sha512_crypt; print(sha512_crypt.hash('ВАШ_ПАРОЛЬ'))"
+# Passwords are stored as SHA-512 hashes.
+# Generate a hash on the control node:
+#   openssl passwd -6 'YOUR_PASSWORD'
+# or:
+#   python3 -c "from passlib.hash import sha512_crypt; print(sha512_crypt.hash('YOUR_PASSWORD'))"
 #
-# Рекомендуется зашифровать этот файл через ansible-vault:
+# Recommended: encrypt this file with ansible-vault:
 #   ansible-vault encrypt group_vars/new_vps.yml
 #
-# Флаги:
-#   groups          — список групп Linux (по умолчанию [])
-#   shell           — оболочка (по умолчанию /bin/bash)
-#   password        — хэш пароля SHA-512
-#   sudo_nopasswd   — создать /etc/sudoers.d/<user> с NOPASSWD (по умолчанию false)
-#   ssh_public_keys — список публичных SSH-ключей (cat ~/.ssh/id_ed25519.pub)
+# Flags:
+#   groups          — list of Linux groups (default [])
+#   shell           — shell (default /bin/bash)
+#   password        — SHA-512 password hash
+#   sudo_nopasswd   — create /etc/sudoers.d/<user> with NOPASSWD (default false)
+#   ssh_public_keys — list of public SSH keys (cat ~/.ssh/id_ed25519.pub)
 #
 users:
   myuser:
     groups: ["sudo"]
     shell: /bin/bash
-    password: "$6$ЗАМЕНИТЕ$НА_ХЭШ_ПАРОЛЯ"
+    password: "$6$REPLACE$WITH_PASSWORD_HASH"
     sudo_nopasswd: true
     ssh_public_keys:
-      - "ssh-ed25519 ЗАМЕНИТЕ_НА_ВАШ_ПУБЛИЧНЫЙ_КЛЮЧ ansible"
-      # - "ssh-ed25519 ВТОРОЙ_КЛЮЧ personal-laptop"   # можно добавить ещё
+      - "ssh-ed25519 REPLACE_WITH_YOUR_PUBLIC_KEY ansible"
+      # - "ssh-ed25519 SECOND_KEY personal-laptop"   # optional
   root:
-    password: "$6$ЗАМЕНИТЕ$НА_ХЭШ_ПАРОЛЯ"
+    password: "$6$REPLACE$WITH_PASSWORD_HASH"
 
-# ── Сертификаты (ACME через Caddy) ───────────────────────────────────────────
-# Caddy автоматически получает и обновляет сертификат через Let's Encrypt.
-# Скрипт cert-sync ежедневно копирует сертификаты из хранилища Caddy
-# в certs_dest_dir и перезапускает x-ui при изменении.
+# ── Certificates (ACME via Caddy) ─────────────────────────────────────────────
+# Caddy automatically obtains and renews the certificate via Let's Encrypt.
 #
 acme_email: "admin@example.com"
 
-# ── 3x-ui ────────────────────────────────────────────────────────────────────
-install_3xui: true                  # false = пропустить установку 3x-ui
-xui_version: ""                     # пусто = latest; или "2.3.11"
+# ── 3x-ui ─────────────────────────────────────────────────────────────────────
+install_3xui: true                  # false = skip 3x-ui installation
+xui_version: ""                     # empty = latest; or "2.3.11"
 xui_db_src: "files/x-ui.db"
 xui_db_dest: "/etc/x-ui/x-ui.db"
 
-# ── Caddy ────────────────────────────────────────────────────────────────────
-# Схема работы:
-#   Caddy слушает порт 443, получает TLS-сертификат через ACME (HTTP-01, порт 80).
-#   xui_panel_path  → панель управления x-ui (localhost:xui_panel_port)
-#   xray_ws_path    → xray WebSocket (localhost:xray_port, VPN-трафик)
-#   всё остальное   → редирект на caddy_fallback_url (сайт-камуфляж)
+# ── Caddy ─────────────────────────────────────────────────────────────────────
+# How it works:
+#   Caddy listens on port 443, obtains TLS certificate via ACME (HTTP-01, port 80).
+#   xui_panel_path  → x-ui management panel (localhost:xui_panel_port)
+#   xray_ws_path    → xray WebSocket (localhost:xray_port, VPN traffic)
+#   everything else → redirect to caddy_fallback_url (camouflage site)
 
-# Внешний сайт-камуфляж — куда Caddy редиректит не-VPN трафик
+# External camouflage site — where Caddy redirects non-VPN traffic
 caddy_fallback_url: "https://example.com"
 
-# Секретный путь для панели управления x-ui (начинается с /).
-# Символ * в конце добавляется автоматически.
+# Secret path for the x-ui management panel (starts with /).
+# The * wildcard at the end is added automatically.
 xui_panel_path: "/your-secret-panel-path"
 
-# Порт панели x-ui (localhost only, проксируется через Caddy)
+# x-ui panel port (localhost only, proxied through Caddy)
 xui_panel_port: 54321
 
-# Секретный путь для WebSocket-подключений xray (начинается с /).
-# Символ * в конце добавляется автоматически.
+# Secret path for xray WebSocket connections (starts with /).
+# The * wildcard at the end is added automatically.
 xray_ws_path: "/your-secret-path"
 
-# Порт, на котором xray слушает WebSocket-подключения (localhost only)
+# Port on which xray listens for WebSocket connections (localhost only)
 xray_port: 10000
 
-# ── Пакеты ───────────────────────────────────────────────────────────────────
-# Дополнительные пакеты (по желанию).
-# Обязательные пакеты (iptables, ipset, ipset-persistent, netfilter-persistent, sqlite3)
-# устанавливаются автоматически — дублировать не нужно.
+# ── Packages ──────────────────────────────────────────────────────────────────
+# Additional packages (optional).
+# Mandatory packages (iptables, iptables-persistent, ipset, ipset-persistent,
+# netfilter-persistent, sqlite3) are installed automatically — no need to duplicate.
 extra_packages:
   - sudo
   - curl
@@ -102,8 +100,8 @@ extra_packages:
   - traceroute
 
 # ── sysctl ────────────────────────────────────────────────────────────────────
-# Параметры ядра. Ansible применяет каждый через модуль sysctl
-# и записывает в sysctl_dest (персистентно через sysctl --system).
+# Kernel parameters. Applied via sysctl --system and written to sysctl_dest
+# for persistence across reboots.
 sysctl_dest: "/etc/sysctl.d/99-custom.conf"
 sysctl_settings:
   # TCP hardening
@@ -112,43 +110,43 @@ sysctl_settings:
   net.ipv4.tcp_keepalive_time: 300
   net.ipv4.tcp_keepalive_probes: 5
   net.ipv4.tcp_keepalive_intvl: 15
-  # Защита от spoofing
+  # Spoofing protection
   net.ipv4.conf.all.rp_filter: 1
   net.ipv4.conf.default.rp_filter: 1
-  # Не форвардить пакеты (не роутер)
+  # No packet forwarding (not a router)
   net.ipv4.ip_forward: 0
   net.ipv6.conf.all.forwarding: 0
-  # Игнорировать broadcast ping
+  # Ignore broadcast ping
   net.ipv4.icmp_echo_ignore_broadcasts: 1
-  # Очередь соединений
+  # Connection queue
   net.core.somaxconn: 1024
   net.ipv4.tcp_max_syn_backlog: 2048
-  # BBR — обязательно для 3x-ui (значение без знака =)
+  # BBR — required for 3x-ui (value without = sign)
   net.core.default_qdisc: fq
   net.ipv4.tcp_congestion_control: bbr
 
 # ── iptables ──────────────────────────────────────────────────────────────────
-# Правила генерируются из шаблона templates/iptables_v4.j2 / iptables_v6.j2.
-# Правила для SSH-порта и ipset-сета подставляются автоматически.
+# Rules are generated from templates/iptables_v4.j2 / iptables_v6.j2.
+# SSH port and ipset set are substituted automatically.
 #
-# allowed_tcp_ports — дополнительные TCP-порты открытые для всех
-# allowed_udp_ports — дополнительные UDP-порты открытые для всех
+# allowed_tcp_ports — additional TCP ports open to everyone
+# allowed_udp_ports — additional UDP ports open to everyone
 iptables_rules_v4_dest: "/etc/iptables/rules.v4"
 iptables_rules_v6_dest: "/etc/iptables/rules.v6"
 
 allowed_tcp_ports:
   - 80    # HTTP (Caddy ACME HTTP-01 challenge)
-  - 443   # HTTPS (x-ray инбаунды)
+  - 443   # HTTPS (xray inbounds)
 
 allowed_udp_ports: []
-  # - 51820  # WireGuard (пример)
+  # - 51820  # WireGuard (example)
 
-# ── ipset ────────────────────────────────────────────────────────────────────
-# Ansible создаст set типа hash:ip с именем ipset_set_name и добавит
-# каждый адрес из ipset_hosts через ipset add.
-# Если список пуст — блок ipset пропускается.
-ipset_set_name: "allowed_hosts"     # имя set'а (используется в iptables-правилах)
+# ── ipset ─────────────────────────────────────────────────────────────────────
+# Ansible creates a hash:ip set named ipset_set_name and adds each address
+# from ipset_hosts via ipset add.
+# If the list is empty — the ipset block is skipped (set is still created empty).
+ipset_set_name: "allowed_hosts"     # set name (used in iptables rules)
 ipset_hosts:
   - "1.2.3.4"
   - "5.6.7.8"
-  # - "ещё IP"
+  # - "another IP"

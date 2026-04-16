@@ -1,34 +1,34 @@
-# /etc/caddy/Caddyfile — управляется Ansible, не редактировать вручную
-# Сгенерировано из templates/Caddyfile.j2
+# /etc/caddy/Caddyfile — managed by Ansible, do not edit manually
+# Generated from templates/Caddyfile.j2
 
 {
-    # Email для уведомлений Let's Encrypt об истечении сертификата
+    # Email for Let's Encrypt expiry notifications
     email {{ acme_email }}
-    # debug  # Раскомментировать для отладки. Отключить после завершения отладки!
+    # debug  # Uncomment for debugging. Disable after debugging!
 }
 
 {{ hostname }} {
     # log {
     #     output stderr
-    #     level DEBUG  # Раскомментировать для отладки. Отключить после завершения отладки!
+    #     level DEBUG  # Uncomment for debugging. Disable after debugging!
     # }
 
     route {
-        # Панель управления x-ui (секретный URL, проксируется на localhost)
+        # x-ui management panel (secret URL, proxied to localhost)
         @panel path {{ xui_panel_path }}*
         reverse_proxy @panel localhost:{{ xui_panel_port }} {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
         }
 
-        # WebSocket → xray (VPN-трафик по секретному пути)
+        # WebSocket → xray (VPN traffic via secret path)
         @vless path {{ xray_ws_path }}*
         reverse_proxy @vless localhost:{{ xray_port }} {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
         }
 
-        # Всё остальное — редирект на сайт-камуфляж
+        # Everything else — redirect to camouflage site
         redir {{ caddy_fallback_url }}{uri} permanent
     }
 }

@@ -1,9 +1,17 @@
 # Deployment Instructions
 
+## Overview
+
 ```
-Step 1  — once, during initial project setup
-Step 2  — for each new server
+Step 1 (once)         — clone the repo, install Ansible, configure variables
+Step 2 (each server)  — upload SSH key, create inventory, run 2 playbooks
 ```
+
+**Two playbooks — two stages:**
+- `site-init.yml` — port 22, root. Configures the OS, users, SSH, firewall.
+  After completion: root is locked, SSH moves to the custom port. **Run once per server.**
+- `site-configure.yml` — custom port, your user. Installs 3x-ui and Caddy.
+  **Idempotent** — can be re-run to update the configuration.
 
 ---
 
@@ -53,22 +61,20 @@ cat ~/.ssh/id_ed25519.pub
 ### 1.4. Copy x-ui.db from the reference server
 
 This is the **only file** that comes from the reference server.
-It contains inbounds and TLS settings.
+It contains inbounds and connection settings.
 
 ```bash
 scp root@<REFERENCE_IP>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 ```
 
-> **About `certs_dest_dir` and x-ui.db paths:**
-> Ansible automatically updates the certificate paths in `x-ui.db` after copying it —
-> writes `certs_dest_dir/hostname.crt` and `certs_dest_dir/hostname.key` into the database.
-> No changes needed on the reference server.
+> **About certificate paths:**
+> The x-ui panel is accessed via a secret URL in Caddy — TLS is handled by Caddy,
+> the panel runs on localhost over plain HTTP. The `webCertFile` and `webKeyFile`
+> fields are cleared automatically in the DB. `webListen` is set to `127.0.0.1`.
 >
 > **⚠️ Certificate paths in inbounds:**
-> Ansible only updates the **panel** certificate paths (`webCertFile`, `webKeyFile`).
-> If inbounds on the reference server have TLS configured with explicit certificate paths —
-> those paths are **not updated automatically**. After deployment, open the x-ui panel,
-> check the TLS settings of each inbound, and update the paths manually if needed.
+> If inbounds on the reference server have explicit certificate paths configured —
+> after deployment open the x-ui panel and update those paths manually.
 
 ---
 
@@ -76,21 +82,22 @@ scp root@<REFERENCE_IP>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 
 ```bash
 cp group_vars/new_vps.yml.example group_vars/new_vps.yml
+nano group_vars/new_vps.yml
 ```
 
-Open `group_vars/new_vps.yml` and fill in the parameters:
-
-#### Required
+#### Required parameters
 
 | Parameter | Description |
 |---|---|
 | `hostname` | Server FQDN, e.g. `vps1.example.com` — used as hostname and for the ACME certificate |
-| `ssh_port` | SSH port after hardening (not 22) |
+| `ssh_port` | SSH port after hardening (not 22, e.g. `275`) |
 | `deploy_user` | Username for stage 2 — **must be listed in `users`** |
 | `acme_email` | Email for Let's Encrypt registration |
-| `certs_dest_dir` | Path where cert-sync places certificates (auto-updated in x-ui.db) |
 | `users.<name>.password` | SHA-512 password hash |
 | `users.<name>.ssh_public_keys` | List of public SSH keys (at least one) |
+| `caddy_fallback_url` | Camouflage site — where Caddy redirects regular traffic |
+| `xui_panel_path` | Secret path for the x-ui panel, e.g. `/my-secret-panel` |
+| `xray_ws_path` | Secret WebSocket path for xray, e.g. `/my-secret-ws` |
 
 #### User parameters (optional)
 
@@ -104,9 +111,8 @@ Open `group_vars/new_vps.yml` and fill in the parameters:
 
 | Parameter | Default | Description |
 |---|---|---|
-| `caddy_fallback_url` | — | Camouflage site — where Caddy redirects non-VPN traffic |
-| `xray_ws_path` | — | Secret WebSocket path for xray (starts with `/`) |
-| `xray_port` | `10000` | xray port on localhost (WebSocket) |
+| `xui_panel_port` | `54321` | x-ui panel port (localhost) |
+| `xray_port` | `10000` | xray WebSocket port (localhost) |
 | `install_3xui` | `true` | Install 3x-ui |
 | `xui_version` | `""` (latest) | 3x-ui version, e.g. `2.3.11` |
 
@@ -180,14 +186,7 @@ Add this flag on every playbook run:
 ansible-playbook ... --ask-vault-pass
 ```
 
-To make changes — decrypt, edit, re-encrypt:
-```bash
-ansible-vault decrypt group_vars/new_vps.yml
-nano group_vars/new_vps.yml
-ansible-vault encrypt group_vars/new_vps.yml
-```
-
-Or edit without decrypting (opens in $EDITOR):
+To make changes — edit without decrypting (opens in $EDITOR):
 ```bash
 ansible-vault edit group_vars/new_vps.yml
 ```
@@ -204,10 +203,10 @@ ansible-vault edit group_vars/new_vps.yml
 
 DNS is required for obtaining a TLS certificate via Caddy ACME (HTTP-01 challenge — Let's Encrypt connects to port 80 of the domain). Everything else — SSH, users, firewall, 3x-ui — works without DNS.
 
-**What exactly needs to be configured:** an **A record** in the domain's DNS zone pointing to the IP of the new server. Having internet access and being able to resolve `google.com` does not count.
+**What exactly needs to be configured:** an **A record** in the domain's DNS zone pointing to the IP of the new server.
 
 ```bash
-dig +short example.com
+dig +short vps1.example.com
 # should return the new server's IP, e.g.: 1.2.3.4
 ```
 
@@ -229,9 +228,10 @@ ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<IP>
 
 ```bash
 cp inventory.ini.example inventory.ini
+nano inventory.ini   # replace YOUR_SERVER_IP with the actual server IP
 ```
 
-Replace `YOUR_SERVER_IP` with the server's IP address. One file works for both stages.
+One `inventory.ini` works for both stages.
 
 ---
 
@@ -244,13 +244,14 @@ ansible-playbook -i inventory.ini site-init.yml --ask-vault-pass
 ```
 
 What happens:
-1. `apt full-upgrade` (if there are updates — reboot)
-2. Install packages from `extra_packages`
-3. Create users, SSH keys from config, sudoers
-4. Set hostname
-5. SSH hardening: custom port, root locked, key-only auth
-6. sysctl, ipset, iptables
-7. Reboot → SSH comes up on `ssh_port`
+1. `apt full-upgrade` (if there are updates — automatic reboot and continuation)
+2. Wait for cloud-init and apt lock to clear (up to 30 minutes — some providers run updates right after provisioning)
+3. Install packages from `extra_packages`
+4. Create users, SSH keys from config, sudoers
+5. Set hostname
+6. SSH hardening: custom port, root locked, key-only auth
+7. sysctl, ipset, iptables
+8. Reboot → SSH comes up on `ssh_port`
 
 ⚠️ **After this step, stage 1 cannot be re-run** — SSH on port 22 is closed, root is locked.
 
@@ -266,12 +267,11 @@ ansible-playbook -i inventory.ini site-configure.yml --ask-vault-pass
 
 What happens:
 1. Install 3x-ui (if not already installed)
-2. Upload `x-ui.db`, automatic update of certificate paths
+2. Upload `x-ui.db`, update settings in DB (webListen, webBasePath, clear certificate paths)
 3. Install Caddy from the official repository
-4. Deploy Caddyfile (Caddy on port 443: ACME + WebSocket proxy → xray + fallback)
-5. Deploy `cert-sync.sh` + systemd drop-in (runs as root via `ExecStartPost`)
-6. Final reboot → wait for certificate → cert-sync → start x-ui
-   The playbook completes only when both x-ui and Caddy are active
+4. Deploy Caddyfile (Caddy on port 443: ACME + panel proxy + WebSocket → xray + fallback)
+5. Final reboot → wait for ACME certificate → start x-ui
+   The playbook completes only when Caddy has obtained the certificate and x-ui is active
 
 This step is **idempotent** — it can be re-run to update the configuration.
 
@@ -286,11 +286,8 @@ ssh -p <ssh_port> <deploy_user>@<IP>
 # Service status
 sudo systemctl status x-ui caddy
 
-# Certificates in place
-ls -la /etc/ssl/<hostname>/
-
-# cert-sync log
-sudo journalctl -u caddy --no-pager | grep cert-sync
+# x-ui panel is available at:
+# https://<hostname><xui_panel_path>
 ```
 
 ---
@@ -327,16 +324,20 @@ Use this to: update `x-ui.db`, change the Caddyfile, or change the 3x-ui version
 **Stage 1 hung or failed before finishing:**
 The server may have rebooted with the old SSH config. Try connecting on port 22 as root — if it works, stage 1 did not complete. Fix the issue and re-run.
 
+**apt is blocked for a long time:**
+This is normal — some hosting providers run updates right after provisioning.
+The playbook waits up to 30 minutes (30 retries × 60 seconds). You'll see RETRYING messages in the output.
+
 **Caddy did not obtain a certificate:**
 ```bash
 sudo systemctl status caddy
 sudo journalctl -u caddy -n 50
 ```
-Make sure DNS is configured and port 80 is open (`allowed_tcp_ports` contains `80`).
+Make sure DNS is configured (`dig +short <hostname>` returns the server IP) and port 80 is open (`allowed_tcp_ports` contains `80`).
 
-**x-ui does not see the certificate:**
+**x-ui panel is not accessible:**
+Check that Caddy is running and `xui_panel_path` is correct:
 ```bash
-ls -la /etc/ssl/<hostname>/
-sudo journalctl -u caddy --no-pager | grep cert-sync
+sudo systemctl status caddy
+curl -s http://localhost:<xui_panel_port>  # should respond
 ```
-Make sure `certs_dest_dir` matches the path in x-ui inbound TLS settings.

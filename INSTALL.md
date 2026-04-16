@@ -1,9 +1,17 @@
 # Инструкция по развёртыванию
 
+## Краткий обзор
+
 ```
-Шаг 1  — один раз, при первой установке проекта
-Шаг 2  — для каждого нового сервера
+Шаг 1 (один раз)  — клонировать репозиторий, установить Ansible, настроить конфиг
+Шаг 2 (каждый сервер)  — залить ключ, создать inventory, запустить 2 playbook-а
 ```
+
+**Два playbook — два этапа:**
+- `site-init.yml` — порт 22, root. Настраивает ОС, пользователей, SSH, firewall.
+  После завершения: root заблокирован, SSH на кастомном порту. **Запускается один раз.**
+- `site-configure.yml` — кастомный порт, ваш пользователь. Устанавливает 3x-ui и Caddy.
+  **Идемпотентен** — можно перезапускать для обновления конфигурации.
 
 ---
 
@@ -53,22 +61,20 @@ cat ~/.ssh/id_ed25519.pub
 ### 1.4. Скопировать x-ui.db с эталонного сервера
 
 Это **единственный файл**, который берётся с эталонного сервера.
-В нём хранятся инбаунды и настройки TLS.
+В нём хранятся инбаунды и настройки подключений.
 
 ```bash
 scp root@<IP_ЭТАЛОНА>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 ```
 
-> **Про `certs_dest_dir` и пути в x-ui.db:**
-> Ansible автоматически обновляет пути к сертификатам в `x-ui.db` после заливки —
-> прописывает туда `certs_dest_dir/hostname.crt` и `certs_dest_dir/hostname.key`.
-> Трогать эталонный сервер не нужно.
+> **Про пути к сертификатам:**
+> Панель x-ui доступна через секретный URL в Caddy — сертификат хранится в Caddy,
+> панель работает на localhost по HTTP. Пути `webCertFile` и `webKeyFile` в БД
+> очищаются автоматически. Поле `webListen` выставляется в `127.0.0.1`.
 >
 > **⚠️ Пути к сертификатам в инбаундах:**
-> Ansible обновляет только пути к сертификатам **панели** x-ui (`webCertFile`, `webKeyFile`).
-> Если в инбаундах эталонного сервера настроен TLS с явными путями к сертификатам —
-> эти пути **не обновляются автоматически**. После деплоя зайдите в панель x-ui,
-> проверьте настройки TLS каждого инбаунда и при необходимости обновите пути вручную.
+> Если в инбаундах эталонного сервера прописаны явные пути к сертификатам —
+> после деплоя зайдите в панель x-ui и обновите эти пути вручную.
 
 ---
 
@@ -76,21 +82,22 @@ scp root@<IP_ЭТАЛОНА>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 
 ```bash
 cp group_vars/new_vps.yml.example group_vars/new_vps.yml
+nano group_vars/new_vps.yml
 ```
 
-Открыть `group_vars/new_vps.yml` и заполнить параметры:
-
-#### Обязательные
+#### Обязательные параметры
 
 | Параметр | Описание |
 |---|---|
 | `hostname` | FQDN сервера, например `vps1.example.com` — используется как hostname и для ACME-сертификата |
-| `ssh_port` | SSH-порт после hardening (не 22) |
+| `ssh_port` | SSH-порт после hardening (не 22, например `275`) |
 | `deploy_user` | Имя пользователя для этапа 2 — **должен быть в `users`** |
 | `acme_email` | Email для регистрации в Let's Encrypt |
-| `certs_dest_dir` | Путь к сертификатам (пути в x-ui.db обновляются автоматически) |
-| `users.<name>.password` | SHA-512 хэш пароля пользователя |
+| `users.<name>.password` | SHA-512 хэш пароля |
 | `users.<name>.ssh_public_keys` | Список публичных SSH-ключей (минимум один) |
+| `caddy_fallback_url` | Сайт-камуфляж — куда Caddy редиректит обычный трафик |
+| `xui_panel_path` | Секретный путь к панели x-ui, например `/my-secret-panel` |
+| `xray_ws_path` | Секретный путь WebSocket для xray, например `/my-secret-ws` |
 
 #### Параметры пользователей (опционально)
 
@@ -104,9 +111,8 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 
 | Параметр | По умолчанию | Описание |
 |---|---|---|
-| `caddy_fallback_url` | — | Сайт-камуфляж — куда Caddy редиректит не-VPN трафик |
-| `xray_ws_path` | — | Секретный путь WebSocket для xray (начинается с `/`) |
-| `xray_port` | `10000` | Порт xray на localhost (WebSocket) |
+| `xui_panel_port` | `54321` | Порт панели x-ui (localhost) |
+| `xray_port` | `10000` | Порт xray WebSocket (localhost) |
 | `install_3xui` | `true` | Устанавливать 3x-ui |
 | `xui_version` | `""` (latest) | Версия 3x-ui, например `2.3.11` |
 
@@ -180,14 +186,7 @@ ansible-vault encrypt group_vars/new_vps.yml
 ansible-playbook ... --ask-vault-pass
 ```
 
-Для внесения изменений — расшифровать, отредактировать, зашифровать обратно:
-```bash
-ansible-vault decrypt group_vars/new_vps.yml
-nano group_vars/new_vps.yml
-ansible-vault encrypt group_vars/new_vps.yml
-```
-
-Или редактировать не расшифровывая (откроет в $EDITOR):
+Для внесения изменений — редактировать напрямую (откроет в $EDITOR):
 ```bash
 ansible-vault edit group_vars/new_vps.yml
 ```
@@ -204,10 +203,10 @@ ansible-vault edit group_vars/new_vps.yml
 
 DNS нужен для получения TLS-сертификата через Caddy ACME (HTTP-01 challenge — Let's Encrypt обращается на порт 80 домена). Всё остальное — SSH, пользователи, firewall, 3x-ui — работает без DNS.
 
-**Что именно должно быть настроено:** в DNS-зоне домена должна существовать **A-запись**, указывающая на IP нового сервера. То, что у вас работает интернет и резолвится `google.com` — не считается.
+**Что именно должно быть настроено:** в DNS-зоне домена должна существовать **A-запись**, указывающая на IP нового сервера.
 
 ```bash
-dig +short example.com
+dig +short vps1.example.com
 # должен вернуть IP нового сервера, например: 1.2.3.4
 ```
 
@@ -229,9 +228,10 @@ ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<IP>
 
 ```bash
 cp inventory.ini.example inventory.ini
+nano inventory.ini   # вписать IP сервера вместо YOUR_SERVER_IP
 ```
 
-Вписать IP сервера вместо `YOUR_SERVER_IP`. Один файл работает для обоих этапов.
+Один `inventory.ini` работает для обоих этапов.
 
 ---
 
@@ -244,15 +244,16 @@ ansible-playbook -i inventory.ini site-init.yml --ask-vault-pass
 ```
 
 Что происходит:
-1. `apt full-upgrade` (если есть обновления — перезагрузка)
-2. Установка пакетов из `extra_packages`
-3. Создание пользователей, SSH-ключи из конфига, sudoers
-4. Установка hostname
-5. SSH hardening: кастомный порт, root закрыт, только ключи
-6. sysctl, ipset, iptables
-7. Перезагрузка → SSH поднимается на `ssh_port`
+1. `apt full-upgrade` (если есть обновления — автоматическая перезагрузка и продолжение)
+2. Ожидание окончания cloud-init и освобождения блокировки apt (до 30 минут — некоторые хостеры накатывают обновления сразу после provisioning)
+3. Установка пакетов из `extra_packages`
+4. Создание пользователей, SSH-ключи из конфига, sudoers
+5. Установка hostname
+6. SSH hardening: кастомный порт, root заблокирован, только ключи
+7. sysctl, ipset, iptables
+8. Перезагрузка → SSH поднимается на `ssh_port`
 
-⚠️ **После этого шага этап 1 нельзя запустить повторно** — SSH на 22 закрыт, root закрыт.
+⚠️ **После этого шага этап 1 нельзя запустить повторно** — SSH на 22 закрыт, root заблокирован.
 
 ---
 
@@ -266,12 +267,11 @@ ansible-playbook -i inventory.ini site-configure.yml --ask-vault-pass
 
 Что происходит:
 1. Установка 3x-ui (если не установлен)
-2. Загрузка `x-ui.db`, автоматическое обновление путей к сертификатам
+2. Загрузка `x-ui.db`, обновление настроек в БД (webListen, webBasePath, очистка путей к сертификатам)
 3. Установка Caddy из официального репозитория
-4. Деплой Caddyfile (Caddy на порту 443: ACME + WebSocket-прокси → xray + fallback)
-5. Деплой `cert-sync.sh` + systemd drop-in (запускается от root через `ExecStartPost`)
-6. Финальная перезагрузка → ожидание сертификата → cert-sync → запуск x-ui
-   Плейбук завершается только когда x-ui и Caddy активны
+4. Деплой Caddyfile (Caddy на порту 443: ACME + прокси на панель x-ui + WebSocket → xray + fallback)
+5. Финальная перезагрузка → ожидание ACME-сертификата → запуск x-ui
+   Плейбук завершается только когда Caddy получил сертификат и x-ui активен
 
 Этот шаг **идемпотентен** — можно запускать повторно для обновления конфигурации.
 
@@ -286,11 +286,8 @@ ssh -p <ssh_port> <deploy_user>@<IP>
 # Статус сервисов
 sudo systemctl status x-ui caddy
 
-# Сертификаты на месте
-ls -la /etc/ssl/<hostname>/
-
-# Лог cert-sync
-sudo journalctl -u caddy --no-pager | grep cert-sync
+# Панель x-ui доступна по адресу:
+# https://<hostname><xui_panel_path>
 ```
 
 ---
@@ -327,16 +324,20 @@ ansible-playbook -i inventory.ini site-configure.yml
 **Этап 1 завис или упал до конца:**
 Сервер мог перезагрузиться со старым SSH-конфигом. Попробуйте подключиться на порту 22 от root — если получается, значит этап 1 не завершился. Исправьте проблему и запустите заново.
 
+**apt завис надолго:**
+Это нормально — некоторые хостеры запускают обновления сразу после provisioning.
+Playbook ждёт до 30 минут (30 попыток × 60 секунд). В логе будут видны RETRYING-сообщения.
+
 **Caddy не получил сертификат:**
 ```bash
 sudo systemctl status caddy
 sudo journalctl -u caddy -n 50
 ```
-Убедитесь что DNS настроен и порт 80 открыт (`allowed_tcp_ports` содержит `80`).
+Убедитесь что DNS настроен (`dig +short <hostname>` возвращает IP сервера) и порт 80 открыт (`allowed_tcp_ports` содержит `80`).
 
-**x-ui не видит сертификат:**
+**Панель x-ui недоступна:**
+Проверьте что Caddy запущен и `xui_panel_path` указан корректно:
 ```bash
-ls -la /etc/ssl/<hostname>/
-sudo journalctl -u caddy --no-pager | grep cert-sync
+sudo systemctl status caddy
+curl -s http://localhost:<xui_panel_port>  # должен ответить
 ```
-Убедитесь что `certs_dest_dir` совпадает с путём в настройках инбаунда в x-ui.
