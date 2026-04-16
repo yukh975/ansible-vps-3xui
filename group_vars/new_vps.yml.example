@@ -52,10 +52,7 @@ users:
 # Скрипт cert-sync ежедневно копирует сертификаты из хранилища Caddy
 # в certs_dest_dir и перезапускает x-ui при изменении.
 #
-# acme_email  — обязательно, используется при регистрации в Let's Encrypt
-# certs_dest_dir — куда копируются сертификаты для x-ui (должно совпадать с x-ui.db)
 acme_email: "admin@example.com"
-certs_dest_dir: "/etc/ssl/{{ hostname }}"
 
 # ── 3x-ui ────────────────────────────────────────────────────────────────────
 install_3xui: true                  # false = пропустить установку 3x-ui
@@ -66,12 +63,19 @@ xui_db_dest: "/etc/x-ui/x-ui.db"
 # ── Caddy ────────────────────────────────────────────────────────────────────
 # Схема работы:
 #   Caddy слушает порт 443, получает TLS-сертификат через ACME (HTTP-01, порт 80).
-#   Трафик по xray_ws_path → xray на localhost:xray_port (WebSocket, VPN-трафик).
-#   Остальной трафик → редирект на caddy_fallback_url (сайт-камуфляж).
-#   Сертификат синхронизируется в certs_dest_dir для панели x-ui.
+#   xui_panel_path  → панель управления x-ui (localhost:xui_panel_port)
+#   xray_ws_path    → xray WebSocket (localhost:xray_port, VPN-трафик)
+#   всё остальное   → редирект на caddy_fallback_url (сайт-камуфляж)
 
 # Внешний сайт-камуфляж — куда Caddy редиректит не-VPN трафик
 caddy_fallback_url: "https://example.com"
+
+# Секретный путь для панели управления x-ui (начинается с /).
+# Символ * в конце добавляется автоматически.
+xui_panel_path: "/your-secret-panel-path"
+
+# Порт панели x-ui (localhost only, проксируется через Caddy)
+xui_panel_port: 54321
 
 # Секретный путь для WebSocket-подключений xray (начинается с /).
 # Символ * в конце добавляется автоматически.

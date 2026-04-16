@@ -55,11 +55,15 @@
     backup: yes
   when: install_3xui | default(true)
 
-- name: "[3xui] Обновить пути к сертификатам в БД"
-  command: >
-    sqlite3 {{ xui_db_dest }}
-    "UPDATE settings SET value='{{ certs_dest_dir }}/{{ hostname }}.crt' WHERE key='webCertFile';
-     UPDATE settings SET value='{{ certs_dest_dir }}/{{ hostname }}.key' WHERE key='webKeyFile';"
+- name: "[3xui] Обновить настройки панели в БД"
+  shell: |
+    sqlite3 {{ xui_db_dest }} "
+      UPDATE settings SET value=''              WHERE key='webCertFile';
+      UPDATE settings SET value=''              WHERE key='webKeyFile';
+      UPDATE settings SET value='127.0.0.1'    WHERE key='webListen';
+      INSERT OR REPLACE INTO settings (key, value) VALUES ('webBasePath', '{{ xui_panel_path }}');
+    "
+  changed_when: true
   when: install_3xui | default(true)
 
 - name: "[3xui] Включить x-ui в автозагрузку"
@@ -127,44 +131,6 @@
     mode: "0644"
   notify: restart caddy
 
-# ── cert-sync ─────────────────────────────────────────────────────────────────
-# cert-sync копирует сертификаты Caddy в certs_dest_dir и перезапускает x-ui.
-# Запускается через ExecStartPost при каждом старте Caddy — в том числе
-# после автообновления сертификата (Caddy перезапускает себя при обновлении).
-
-- name: "[cert-sync] Создать каталог для сертификатов"
-  file:
-    path: "{{ certs_dest_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: "[cert-sync] Установить скрипт"
-  template:
-    src: cert-sync.sh.j2
-    dest: /usr/local/bin/cert-sync.sh
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: "[cert-sync] Создать каталог для systemd override"
-  file:
-    path: /etc/systemd/system/caddy.service.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: "[cert-sync] Установить systemd override для Caddy"
-  template:
-    src: caddy-override.conf.j2
-    dest: /etc/systemd/system/caddy.service.d/cert-sync.conf
-    owner: root
-    group: root
-    mode: "0644"
-  notify: reload systemd and restart caddy
-
 - name: "[caddy] Включить Caddy в автозагрузку"
   systemd:
     name: caddy
@@ -181,23 +147,11 @@
     pre_reboot_delay: 3
     post_reboot_delay: 30
 
-# Останавливаем x-ui — он мог стартовать раньше чем Caddy получил сертификат
-- name: "Остановить x-ui до получения сертификата"
-  systemd:
-    name: x-ui
-    state: stopped
-  ignore_errors: true
-  when: install_3xui | default(true)
-
 # Ждём пока Caddy получит сертификат через ACME (до 5 минут)
 - name: "Ждём сертификат от Caddy (ACME)"
   wait_for:
     path: "/var/lib/caddy/.local/share/caddy/certificates/acme-v02.api.letsencrypt.org-directory/{{ hostname }}/{{ hostname }}.crt"
     timeout: 300
-
-# Синхронизируем сертификаты в certs_dest_dir и запускаем x-ui
-- name: "Запустить cert-sync"
-  command: /usr/local/bin/cert-sync.sh
 
 - name: "Запустить x-ui"
   systemd:
@@ -226,7 +180,7 @@
       - "║  SSH:     порт {{ ssh_port }}, root закрыт"
       - "║  x-ui:    {{ _xui_status.status.ActiveState | default('не установлен') }}"
       - "║  caddy:   {{ _caddy_status.status.ActiveState }}"
-      - "║  TLS:     сертификат получен и синхронизирован"
+      - "║  TLS:     сертификат получен (Caddy)"
       - "╠══════════════════════════════════════════════════════════╣"
       - "║  Если Ansible больше не нужен — удалите технического     ║"
       - "║  пользователя:                                           ║"

@@ -14,6 +14,13 @@
     # }
 
     route {
+        # Панель управления x-ui (секретный URL, проксируется на localhost)
+        @panel path {{ xui_panel_path }}*
+        reverse_proxy @panel localhost:{{ xui_panel_port }} {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+
         # WebSocket → xray (VPN-трафик по секретному пути)
         @vless path {{ xray_ws_path }}*
         reverse_proxy @vless localhost:{{ xray_port }} {

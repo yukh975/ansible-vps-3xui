@@ -16,12 +16,38 @@
     regexp: '^127\.0\.1\.1'
     line: "127.0.1.1 {{ hostname }} {{ hostname.split('.')[0] }}"
 
+# ── Ожидание cloud-init и apt lock ───────────────────────────────────────────
+# Некоторые хостеры запускают apt full-upgrade сразу после provisioning.
+# Ждём завершения cloud-init, затем проверяем что apt не заблокирован.
+# Каждая неудавшаяся попытка выводит "RETRYING" — пользователь видит прогресс.
+
+- name: "[pkg] Ждём завершения cloud-init"
+  stat:
+    path: /var/lib/cloud/instance/boot-finished
+  register: _cloud_init
+  until: _cloud_init.stat.exists
+  retries: 10
+  delay: 60
+  changed_when: false
+  failed_when: false
+
+- name: "[pkg] Ждём освобождения блокировки apt"
+  shell: |
+    ! fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && \
+    ! fuser /var/lib/dpkg/lock >/dev/null 2>&1
+  register: _apt_free
+  until: _apt_free.rc == 0
+  retries: 15
+  delay: 60
+  changed_when: false
+
 # ── Пакеты ───────────────────────────────────────────────────────────────────
 
 - name: "[pkg] apt update"
   apt:
     update_cache: yes
     cache_valid_time: 3600
+    lock_timeout: 300
 
 - name: "[pkg] Установить обязательные пакеты"
   apt:
@@ -33,6 +59,7 @@
       - netfilter-persistent
       - sqlite3
     state: present
+    lock_timeout: 300
   environment:
     DEBIAN_FRONTEND: noninteractive
 
@@ -40,6 +67,7 @@
   apt:
     name: "{{ extra_packages }}"
     state: present
+    lock_timeout: 300
   environment:
     DEBIAN_FRONTEND: noninteractive
 
