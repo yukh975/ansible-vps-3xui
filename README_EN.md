@@ -15,7 +15,9 @@ Takes a freshly installed Debian 12/13 with root SSH access and turns it into a 
 >
 > As a consequence, the link the panel generates for clients (`vless://...?security=none&type=ws&...`) **will not work as-is**. The client sees `security=none` and won't expect TLS from the server — but the server (Caddy) is serving TLS.
 >
-> **Fix:** in the client link (or subscription template), manually change `security=none` → `security=tls`. After that the connection works.
+> **The same applies to the QR code** exported from the panel — it encodes the same string with `security=none`, so it's also broken. Scanning the QR directly won't establish a connection.
+>
+> **Fix:** in the client link (or subscription template), manually change `security=none` → `security=tls` before handing it off to the client (as a link, or as a new QR code generated from the fixed string). After that the connection works.
 >
 > This step must be done **every time** you export a link from the panel. Alternatively, set up a subscription service that rewrites the parameter automatically.
 
