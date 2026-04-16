@@ -8,10 +8,10 @@
 }
 
 {{ hostname }} {
-    log {
-        output stderr
-        level DEBUG
-    }
+    # log {
+    #     output stderr
+    #     level DEBUG  # Раскомментировать для отладки. Отключить после завершения отладки!
+    # }
 
     route {
         # WebSocket → xray (VPN-трафик по секретному пути)

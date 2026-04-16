@@ -104,9 +104,9 @@ cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 
 | Параметр | По умолчанию | Описание |
 |---|---|---|
-| `caddy_https_port` | `8443` | HTTPS-порт Caddy — не 443 (занят x-ray), закрыт снаружи; сертификат получается через HTTP-01 на порту 80 |
-| `caddy_listen_port` | `4443` | Порт, на который x-ray отправляет fallback-трафик |
-| `caddy_fallback_url` | — | Внешний сайт-камуфляж, куда Caddy редиректит трафик |
+| `caddy_fallback_url` | — | Сайт-камуфляж — куда Caddy редиректит не-VPN трафик |
+| `xray_ws_path` | — | Секретный путь WebSocket для xray (начинается с `/`) |
+| `xray_port` | `10000` | Порт xray на localhost (WebSocket) |
 | `install_3xui` | `true` | Устанавливать 3x-ui |
 | `xui_version` | `""` (latest) | Версия 3x-ui, например `2.3.11` |
 
@@ -268,7 +268,7 @@ ansible-playbook -i inventory.ini site-configure.yml --ask-vault-pass
 1. Установка 3x-ui (если не установлен)
 2. Загрузка `x-ui.db`, автоматическое обновление путей к сертификатам
 3. Установка Caddy из официального репозитория
-4. Деплой Caddyfile (порт 80 для ACME, порт `caddy_https_port` для HTTPS)
+4. Деплой Caddyfile (Caddy на порту 443: ACME + WebSocket-прокси → xray + fallback)
 5. Деплой `cert-sync.sh` + systemd drop-in (запускается от root через `ExecStartPost`)
 6. Финальная перезагрузка → ожидание сертификата → cert-sync → запуск x-ui
    Плейбук завершается только когда x-ui и Caddy активны

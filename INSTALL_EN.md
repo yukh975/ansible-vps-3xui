@@ -104,9 +104,9 @@ Open `group_vars/new_vps.yml` and fill in the parameters:
 
 | Parameter | Default | Description |
 |---|---|---|
-| `caddy_https_port` | `8443` | Caddy HTTPS port — not 443 (used by x-ray); closed externally; cert obtained via HTTP-01 on port 80 |
-| `caddy_listen_port` | `4443` | Port where x-ray sends fallback traffic |
-| `caddy_fallback_url` | — | External camouflage site that Caddy redirects traffic to |
+| `caddy_fallback_url` | — | Camouflage site — where Caddy redirects non-VPN traffic |
+| `xray_ws_path` | — | Secret WebSocket path for xray (starts with `/`) |
+| `xray_port` | `10000` | xray port on localhost (WebSocket) |
 | `install_3xui` | `true` | Install 3x-ui |
 | `xui_version` | `""` (latest) | 3x-ui version, e.g. `2.3.11` |
 
@@ -268,7 +268,7 @@ What happens:
 1. Install 3x-ui (if not already installed)
 2. Upload `x-ui.db`, automatic update of certificate paths
 3. Install Caddy from the official repository
-4. Deploy Caddyfile (port 80 for ACME, port `caddy_https_port` for HTTPS)
+4. Deploy Caddyfile (Caddy on port 443: ACME + WebSocket proxy → xray + fallback)
 5. Deploy `cert-sync.sh` + systemd drop-in (runs as root via `ExecStartPost`)
 6. Final reboot → wait for certificate → cert-sync → start x-ui
    The playbook completes only when both x-ui and Caddy are active

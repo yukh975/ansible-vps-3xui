@@ -15,9 +15,10 @@ Target OS: Debian 12/13. Managed from macOS or Linux (Ansible control node).
 
 ### Traffic flow
 
-- x-ray listens on 443 (VPN traffic)
-- Caddy: port 80 (ACME HTTP-01 challenge), port `caddy_https_port`/8443 (HTTPS, closed externally), port `127.0.0.1:caddy_listen_port`/4443 (fallback from x-ray)
-- cert-sync.sh copies certs from Caddy storage to `certs_dest_dir`, then restarts x-ui
+- Caddy listens on 443 (TLS via ACME, port 80 for HTTP-01 challenge)
+- `xray_ws_path/*` → WebSocket proxy → `localhost:xray_port` (xray/VPN traffic)
+- All other traffic → redirect to `caddy_fallback_url` (camouflage site)
+- cert-sync.sh copies certs from Caddy storage to `certs_dest_dir` for x-ui panel, then restarts x-ui
 - cert-sync runs via ExecStartPost with root privileges (`+` prefix in systemd drop-in)
 
 ### Post-reboot sequence (configure.yml)
@@ -32,10 +33,10 @@ After final reboot: stop x-ui → wait for Caddy cert (up to 5 min) → run cert
 | `ssh_port` | — | SSH port after hardening |
 | `deploy_user` | — | User for stage 2 (must be in `users`) |
 | `acme_email` | — | Email for Let's Encrypt |
-| `certs_dest_dir` | — | Directory where cert-sync places certificates |
-| `caddy_https_port` | `8443` | Caddy HTTPS port (not 443 — taken by x-ray) |
-| `caddy_listen_port` | `4443` | Caddy fallback port (localhost only, receives traffic from x-ray) |
+| `certs_dest_dir` | — | Directory where cert-sync places certificates for x-ui panel |
 | `caddy_fallback_url` | — | External camouflage site |
+| `xray_ws_path` | — | Secret WebSocket path for xray (starts with `/`; `*` appended in template) |
+| `xray_port` | `10000` | xray WebSocket port on localhost |
 | `install_3xui` | `true` | Install 3x-ui |
 | `xui_version` | `""` (latest) | 3x-ui version |
 
@@ -43,7 +44,7 @@ Variables removed in v0.9.0: `domain` (replaced by `hostname`), `install_caddy` 
 
 ## Package Installation Notes
 
-- `ipset-persistent` must be in `extra_packages` — provides the `10-ipsets` plugin for `netfilter-persistent`, which saves/restores ipset sets before iptables rules on boot (plugin order: 10-ipsets → 15-ip4tables → 25-ip6tables).
+- `ipset-persistent` is installed automatically (hardcoded in init.yml) — provides the `10-ipsets` plugin for `netfilter-persistent`, which saves/restores ipset sets before iptables rules on boot (plugin order: 10-ipsets → 15-ip4tables → 25-ip6tables).
 - apt task uses `DEBIAN_FRONTEND=noninteractive` — `ipset-persistent` asks an interactive question during install ("save current rules?") which would block Ansible without this.
 
 ## No ansible.posix Dependency

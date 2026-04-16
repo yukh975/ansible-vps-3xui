@@ -138,17 +138,21 @@ certs_dest_dir: "/etc/ssl/{{ hostname }}"  # where cert-sync places the certific
 
 ### Caddy
 
-Caddy serves two purposes:
+Caddy listens on port 443, obtains a TLS certificate via ACME, and manages traffic:
 
-1. **SSL certificate** — obtains a certificate for `hostname` via Let's Encrypt (HTTP-01 challenge on port 80) and syncs it to `certs_dest_dir` for use by x-ray/3x-ui.
-2. **Fallback URL** — receives non-VPN traffic from x-ray (on `127.0.0.1:caddy_listen_port`) and redirects to `caddy_fallback_url`. This address is set as the Fallback URL in 3X-UI inbound settings.
+- **VPN traffic** matching `xray_ws_path` is proxied to xray via WebSocket
+- **Other traffic** is redirected to `caddy_fallback_url` (camouflage site)
+- **Certificate** is synced to `certs_dest_dir` for the x-ui panel
 
-| Variable | Default | Description |
+| Variable | Example | Description |
 |---|---|---|
-| `acme_email` | — | Email for Let's Encrypt (required) |
-| `caddy_listen_port` | `4443` | Port where x-ray sends fallback traffic |
-| `caddy_https_port` | `8443` | Caddy HTTPS port — not 443 (used by x-ray); closed externally; cert obtained via HTTP-01 on port 80 |
-| `caddy_fallback_url` | — | External camouflage site for fallback traffic |
+| `acme_email` | `admin@example.com` | Email for Let's Encrypt (required) |
+| `caddy_fallback_url` | `https://example.com` | Camouflage site for non-VPN traffic |
+| `xray_ws_path` | `/your-secret-path` | Secret WebSocket path for xray (starts with `/`) |
+| `xray_port` | `10000` | xray port on localhost (WebSocket) |
+
+> **debug in Caddyfile** — commented out in the template. Uncomment for debugging,
+> disable in production — affects performance and log volume.
 
 ### Firewall
 
