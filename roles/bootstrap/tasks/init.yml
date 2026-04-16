@@ -37,7 +37,7 @@
     ! fuser /var/lib/dpkg/lock >/dev/null 2>&1
   register: _apt_free
   until: _apt_free.rc == 0
-  retries: 15
+  retries: 30
   delay: 60
   changed_when: false
 
@@ -47,7 +47,6 @@
   apt:
     update_cache: yes
     cache_valid_time: 3600
-    lock_timeout: 300
 
 - name: "[pkg] Установить обязательные пакеты"
   apt:
@@ -59,7 +58,6 @@
       - netfilter-persistent
       - sqlite3
     state: present
-    lock_timeout: 300
   environment:
     DEBIAN_FRONTEND: noninteractive
 
@@ -67,7 +65,6 @@
   apt:
     name: "{{ extra_packages }}"
     state: present
-    lock_timeout: 300
   environment:
     DEBIAN_FRONTEND: noninteractive
 
