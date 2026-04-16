@@ -1,23 +1,25 @@
-# Инструкция по развёртыванию
+# Deployment Instructions
 
-## Краткий обзор
+**Language:** English · [Русский](INSTALL_RU.md)
+
+## Overview
 
 ```
-Шаг 1 (один раз)  — клонировать репозиторий, установить Ansible, настроить конфиг
-Шаг 2 (каждый сервер)  — залить ключ, создать inventory, запустить 2 playbook-а
+Step 1 (once)         — clone the repo, install Ansible, configure variables
+Step 2 (each server)  — upload SSH key, create inventory, run 2 playbooks
 ```
 
-**Два playbook — два этапа:**
-- `site-init.yml` — порт 22, root. Настраивает ОС, пользователей, SSH, firewall.
-  После завершения: root заблокирован, SSH на кастомном порту. **Запускается один раз.**
-- `site-configure.yml` — кастомный порт, ваш пользователь. Устанавливает 3x-ui и Caddy.
-  **Идемпотентен** — можно перезапускать для обновления конфигурации.
+**Two playbooks — two stages:**
+- `site-init.yml` — port 22, root. Configures the OS, users, SSH, firewall.
+  After completion: root is locked, SSH moves to the custom port. **Run once per server.**
+- `site-configure.yml` — custom port, your user. Installs 3x-ui and Caddy.
+  **Idempotent** — can be re-run to update the configuration.
 
 ---
 
-## Шаг 1. Первоначальная настройка (один раз)
+## Step 1. Initial Setup (once)
 
-### 1.1. Клонировать репозиторий
+### 1.1. Clone the repository
 
 ```bash
 git clone https://github.com/yukh975/ansible-vps-3xui.git ansible-vps
@@ -26,7 +28,7 @@ cd ansible-vps
 
 ---
 
-### 1.2. Установить Ansible
+### 1.2. Install Ansible
 
 **macOS:**
 ```bash
@@ -38,101 +40,101 @@ brew install ansible
 sudo apt install ansible
 ```
 
-Проверить:
+Verify:
 ```bash
 ansible --version
 ```
 
 ---
 
-### 1.3. Сгенерировать SSH-ключ (если нет)
+### 1.3. Generate an SSH key (if you don't have one)
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C "ansible"
 ```
 
-Сразу посмотреть публичный ключ — он понадобится в конфиге:
+Print the public key — you'll need it in the config:
 ```bash
 cat ~/.ssh/id_ed25519.pub
 ```
 
 ---
 
-### 1.4. Скопировать x-ui.db с эталонного сервера
+### 1.4. Copy x-ui.db from the reference server
 
-Это **единственный файл**, который берётся с эталонного сервера.
-В нём хранятся инбаунды и настройки подключений.
+This is the **only file** that comes from the reference server.
+It contains inbounds and connection settings.
 
 ```bash
-scp root@<IP_ЭТАЛОНА>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
+scp root@<REFERENCE_IP>:/etc/x-ui/x-ui.db roles/bootstrap/files/x-ui.db
 ```
 
-> **Про пути к сертификатам:**
-> Панель x-ui доступна через секретный URL в Caddy — сертификат хранится в Caddy,
-> панель работает на localhost по HTTP. Пути `webCertFile` и `webKeyFile` в БД
-> очищаются автоматически. Поле `webListen` выставляется в `127.0.0.1`.
+> **About certificate paths:**
+> The x-ui panel is accessed via a secret URL in Caddy — TLS is handled by Caddy,
+> the panel runs on localhost over plain HTTP. The `webCertFile` and `webKeyFile`
+> fields are cleared automatically in the DB. `webListen` is set to `127.0.0.1`.
 >
-> **⚠️ Пути к сертификатам в инбаундах:**
-> Если в инбаундах эталонного сервера прописаны явные пути к сертификатам —
-> после деплоя зайдите в панель x-ui и обновите эти пути вручную.
+> **⚠️ Certificate paths in inbounds:**
+> If inbounds on the reference server have explicit certificate paths configured —
+> after deployment open the x-ui panel and update those paths manually.
 
 ---
 
-### 1.5. Создать файл переменных
+### 1.5. Create the variables file
 
 ```bash
 cp group_vars/new_vps.yml.example group_vars/new_vps.yml
 nano group_vars/new_vps.yml
 ```
 
-> 💡 **Разворачиваете сразу несколько серверов?**
-> `group_vars/new_vps.yml` содержит **общие** переменные для всех хостов в группе (пользователи, ssh_port, пакеты, sysctl). Индивидуальные параметры (как минимум `hostname` — для ACME-сертификата) выносятся в `host_vars/<имя_хоста>.yml`. См. раздел «Развёртывание на несколько серверов» в [README.md](README.md) и шаблон `host_vars/server1.yml.example`.
+> 💡 **Deploying multiple servers at once?**
+> `group_vars/new_vps.yml` holds the **shared** variables for every host in the group (users, ssh_port, packages, sysctl). Per-host values (at minimum `hostname` — for the ACME certificate) go into `host_vars/<host>.yml`. See the "Multi-Server Deployment" section in [README.md](README.md) and the `host_vars/server1.yml.example` template.
 
-#### Обязательные параметры
+#### Required parameters
 
-| Параметр | Описание |
+| Parameter | Description |
 |---|---|
-| `hostname` | FQDN сервера, например `vps1.example.com` — используется как hostname и для ACME-сертификата |
-| `ssh_port` | SSH-порт после hardening (не 22, например `275`) |
-| `deploy_user` | Имя пользователя для этапа 2 — **должен быть в `users`** |
-| `acme_email` | Email для регистрации в Let's Encrypt |
-| `users.<name>.password` | SHA-512 хэш пароля |
-| `users.<name>.ssh_public_keys` | Список публичных SSH-ключей (минимум один) |
-| `caddy_fallback_url` | Сайт-камуфляж — куда Caddy редиректит обычный трафик |
-| `xui_panel_path` | Секретный путь к панели x-ui, например `/my-secret-panel` |
-| `xray_ws_path` | Секретный путь WebSocket для xray, например `/my-secret-ws` |
+| `hostname` | Server FQDN, e.g. `vps1.example.com` — used as hostname and for the ACME certificate |
+| `ssh_port` | SSH port after hardening (not 22, e.g. `275`) |
+| `deploy_user` | Username for stage 2 — **must be listed in `users`** |
+| `acme_email` | Email for Let's Encrypt registration |
+| `users.<name>.password` | SHA-512 password hash |
+| `users.<name>.ssh_public_keys` | List of public SSH keys (at least one) |
+| `caddy_fallback_url` | Camouflage site — where Caddy redirects regular traffic |
+| `xui_panel_path` | Secret path for the x-ui panel, e.g. `/my-secret-panel` |
+| `xray_ws_path` | Secret WebSocket path for xray, e.g. `/my-secret-ws` |
 
-#### Параметры пользователей (опционально)
+#### User parameters (optional)
 
-| Параметр | По умолчанию | Описание |
+| Parameter | Default | Description |
 |---|---|---|
-| `users.<name>.groups` | `[]` | Группы Linux, например `["sudo"]` |
-| `users.<name>.sudo_nopasswd` | `false` | NOPASSWD в sudoers |
-| `users.<name>.has_bashrc` | `false` | Копировать `.bashrc` из `files/<name>/.bashrc` |
+| `users.<name>.groups` | `[]` | Linux groups, e.g. `["sudo"]` |
+| `users.<name>.sudo_nopasswd` | `false` | NOPASSWD in sudoers |
+| `users.<name>.has_bashrc` | `false` | Copy `.bashrc` from `files/<name>/.bashrc` |
 
-#### Сервисы (опционально)
+#### Services (optional)
 
-| Параметр | По умолчанию | Описание |
+| Parameter | Default | Description |
 |---|---|---|
-| `xui_panel_port` | `54321` | Порт панели x-ui (localhost) |
-| `xray_port` | `10000` | Порт xray WebSocket (localhost) |
-| `install_3xui` | `true` | Устанавливать 3x-ui |
-| `xui_version` | `""` (latest) | Версия 3x-ui, например `2.3.11` |
+| `xui_panel_port` | `54321` | x-ui panel port (localhost) |
+| `xray_port` | `10000` | xray WebSocket port (localhost) |
+| `install_3xui` | `true` | Install 3x-ui |
+| `xui_version` | `""` (latest) | 3x-ui version, e.g. `2.3.11` |
 
-#### Firewall (опционально)
+#### Firewall (optional)
 
-| Параметр | По умолчанию | Описание |
+| Parameter | Default | Description |
 |---|---|---|
-| `ipset_hosts` | `[]` | Доверенные IP с полным доступом |
-| `ipset_set_name` | `allowed_hosts` | Имя ipset-сета |
-| `allowed_tcp_ports` | `[80, 443]` | Открытые TCP-порты |
-| `allowed_udp_ports` | `[]` | Открытые UDP-порты |
+| `ipset_hosts` | `[]` | Trusted IPs with full access |
+| `ipset_set_name` | `allowed_hosts` | ipset name |
+| `allowed_tcp_ports` | `[80, 443]` | Open TCP ports |
+| `allowed_udp_ports` | `[]` | Open UDP ports |
 
 ---
 
-#### Как заполнять
+#### How to fill in the values
 
-**SSH-ключи** — вставить прямо в конфиг, можно несколько:
+**SSH keys** — paste directly into the config, multiple keys supported:
 ```bash
 cat ~/.ssh/id_ed25519.pub
 ```
@@ -140,214 +142,214 @@ cat ~/.ssh/id_ed25519.pub
 users:
   myuser:
     ssh_public_keys:
-      - "ssh-ed25519 AAAA...ключ_ansible... ansible"
-      - "ssh-ed25519 AAAA...личный_ключ... personal-laptop"   # опционально
+      - "ssh-ed25519 AAAA...ansible_key... ansible"
+      - "ssh-ed25519 AAAA...personal_key... personal-laptop"   # optional
 ```
 
-**Хэш пароля** — сгенерировать локально:
+**Password hash** — generate locally:
 ```bash
-openssl passwd -6 'ВАШ_ПАРОЛЬ'
+openssl passwd -6 'YOUR_PASSWORD'
 ```
 
-**`.bashrc`** — если нужны алиасы и кастомный промпт:
+**`.bashrc`** — if you need aliases and a custom prompt:
 ```bash
 mkdir -p roles/bootstrap/files/myuser/
 nano roles/bootstrap/files/myuser/.bashrc
 ```
-Затем в конфиге: `has_bashrc: true`.
+Then in the config: `has_bashrc: true`.
 
 ---
 
-### 1.6. (Опционально) Настроить правила iptables
+### 1.6. (Optional) Configure iptables rules
 
-Порты и ipset задаются в конфиге (см. шаг 1.5). Если нужны дополнительные правила — отредактируй шаблоны напрямую **до запуска playbook**:
-
-```
-roles/bootstrap/templates/iptables_v4.j2   — правила IPv4
-roles/bootstrap/templates/iptables_v6.j2   — правила IPv6
-```
-
-Уже прописаны: политики `INPUT DROP / FORWARD DROP / OUTPUT ACCEPT`, loopback, ESTABLISHED, ICMP, SSH-порт, порты из `allowed_tcp_ports` / `allowed_udp_ports`, ipset.
-
-Добавляй свои правила между существующими блоками, например:
+Ports and ipset are set in the config (see step 1.5). If you need additional rules, edit the templates directly **before running the playbook**:
 
 ```
-# Пример: разрешить входящий WireGuard
+roles/bootstrap/templates/iptables_v4.j2   — IPv4 rules
+roles/bootstrap/templates/iptables_v6.j2   — IPv6 rules
+```
+
+Already included: `INPUT DROP / FORWARD DROP / OUTPUT ACCEPT` policies, loopback, ESTABLISHED, ICMP, SSH port, ports from `allowed_tcp_ports` / `allowed_udp_ports`, and ipset.
+
+Add your own rules between existing blocks, for example:
+
+```
+# Example: allow incoming WireGuard
 -A INPUT -p udp --dport 51820 -j ACCEPT
 ```
 
 ---
 
-### 1.7. (Опционально) Зашифровать конфиг через ansible-vault
+### 1.7. (Optional) Encrypt the config with ansible-vault
 
 ```bash
 ansible-vault encrypt group_vars/new_vps.yml
 ```
 
-При каждом запуске playbook добавлять флаг:
+Add this flag on every playbook run:
 ```bash
 ansible-playbook ... --ask-vault-pass
 ```
 
-Для внесения изменений — редактировать напрямую (откроет в $EDITOR):
+To make changes — edit without decrypting (opens in $EDITOR):
 ```bash
 ansible-vault edit group_vars/new_vps.yml
 ```
 
 ---
 
-> ✅ **Шаг 1 выполнен.** При развёртывании следующих серверов начинайте с Шага 2.
+> ✅ **Step 1 complete.** When deploying additional servers, start from Step 2.
 
 ---
 
-## Шаг 2. Развёртывание нового сервера
+## Step 2. Deploy a New Server
 
-### 2.1. Убедиться что DNS настроен
+### 2.1. Make sure DNS is configured
 
-DNS нужен для получения TLS-сертификата через Caddy ACME (HTTP-01 challenge — Let's Encrypt обращается на порт 80 домена). Всё остальное — SSH, пользователи, firewall, 3x-ui — работает без DNS.
+DNS is required for obtaining a TLS certificate via Caddy ACME (HTTP-01 challenge — Let's Encrypt connects to port 80 of the domain). Everything else — SSH, users, firewall, 3x-ui — works without DNS.
 
-**Что именно должно быть настроено:** в DNS-зоне домена должна существовать **A-запись**, указывающая на IP нового сервера.
+**What exactly needs to be configured:** an **A record** in the domain's DNS zone pointing to the IP of the new server.
 
 ```bash
 dig +short vps1.example.com
-# должен вернуть IP нового сервера, например: 1.2.3.4
+# should return the new server's IP, e.g.: 1.2.3.4
 ```
 
 ---
 
-### 2.2. Залить SSH-ключ на сервер
+### 2.2. Upload the SSH key to the server
 
 ```bash
 ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<IP>
 ```
 
-> Команда запросит пароль root — используйте пароль, выданный хостингом.
-> Это **единственный раз**, когда он понадобится: после этапа 1 пароль root будет изменён,
-> вход по паролю через SSH будет запрещён, доступ — только по ключу.
+> The command will ask for the root password — use the one provided by the hosting provider.
+> This is the **only time** it will be needed: after stage 1 the root password will be changed,
+> password-based SSH login will be disabled, and access will be key-only.
 
 ---
 
-### 2.3. Создать inventory
+### 2.3. Create the inventory
 
 ```bash
 cp inventory.ini.example inventory.ini
-nano inventory.ini   # вписать IP сервера вместо YOUR_SERVER_IP
+nano inventory.ini   # replace YOUR_SERVER_IP with the actual server IP
 ```
 
-Один `inventory.ini` работает для обоих этапов.
+One `inventory.ini` works for both stages.
 
-> 💡 **Несколько серверов сразу?** Добавьте строки в секцию `[new_vps]` и создайте `host_vars/<host>.yml` для каждого (с уникальным `hostname`). Ansible развернёт параллельно. Подробности — в [README.md](README.md).
+> 💡 **Multiple servers at once?** Add more lines to the `[new_vps]` section and create `host_vars/<host>.yml` for each (with a unique `hostname`). Ansible deploys in parallel. Details in [README.md](README.md).
 
 ---
 
-### 2.4. Запустить этап 1 (порт 22, root)
+### 2.4. Run stage 1 (port 22, root)
 
 ```bash
 ansible-playbook -i inventory.ini site-init.yml
-# с vault:
+# with vault:
 ansible-playbook -i inventory.ini site-init.yml --ask-vault-pass
 ```
 
-Что происходит:
-1. `apt full-upgrade` (если есть обновления — автоматическая перезагрузка и продолжение)
-2. Ожидание окончания cloud-init и освобождения блокировки apt (до 30 минут — некоторые хостеры накатывают обновления сразу после provisioning)
-3. Установка пакетов из `extra_packages`
-4. Создание пользователей, SSH-ключи из конфига, sudoers
-5. Установка hostname
-6. SSH hardening: кастомный порт, root заблокирован, только ключи
+What happens:
+1. `apt full-upgrade` (if there are updates — automatic reboot and continuation)
+2. Wait for cloud-init and apt lock to clear (up to 30 minutes — some providers run updates right after provisioning)
+3. Install packages from `extra_packages`
+4. Create users, SSH keys from config, sudoers
+5. Set hostname
+6. SSH hardening: custom port, root locked, key-only auth
 7. sysctl, ipset, iptables
-8. Перезагрузка → SSH поднимается на `ssh_port`
+8. Reboot → SSH comes up on `ssh_port`
 
-⚠️ **После этого шага этап 1 нельзя запустить повторно** — SSH на 22 закрыт, root заблокирован.
+⚠️ **After this step, stage 1 cannot be re-run** — SSH on port 22 is closed, root is locked.
 
 ---
 
-### 2.5. Запустить этап 2 (ssh_port, deploy_user)
+### 2.5. Run stage 2 (ssh_port, deploy_user)
 
 ```bash
 ansible-playbook -i inventory.ini site-configure.yml
-# с vault:
+# with vault:
 ansible-playbook -i inventory.ini site-configure.yml --ask-vault-pass
 ```
 
-Что происходит:
-1. Установка 3x-ui (если не установлен)
-2. Загрузка `x-ui.db`, обновление настроек в БД (webListen, webBasePath, очистка путей к сертификатам)
-3. Установка Caddy из официального репозитория
-4. Деплой Caddyfile (Caddy на порту 443: ACME + прокси на панель x-ui + WebSocket → xray + fallback)
-5. Финальная перезагрузка → ожидание ACME-сертификата → запуск x-ui
-   Плейбук завершается только когда Caddy получил сертификат и x-ui активен
+What happens:
+1. Install 3x-ui (if not already installed)
+2. Upload `x-ui.db`, update settings in DB (webListen, webBasePath, clear certificate paths)
+3. Install Caddy from the official repository
+4. Deploy Caddyfile (Caddy on port 443: ACME + panel proxy + WebSocket → xray + fallback)
+5. Final reboot → wait for ACME certificate → start x-ui
+   The playbook completes only when Caddy has obtained the certificate and x-ui is active
 
-Этот шаг **идемпотентен** — можно запускать повторно для обновления конфигурации.
+This step is **idempotent** — it can be re-run to update the configuration.
 
 ---
 
-### 2.6. Проверить результат
+### 2.6. Verify the result
 
 ```bash
-# Подключиться к серверу
+# Connect to the server
 ssh -p <ssh_port> <deploy_user>@<IP>
 
-# Статус сервисов
+# Service status
 sudo systemctl status x-ui caddy
 
-# Панель x-ui доступна по адресу:
+# x-ui panel is available at:
 # https://<hostname><xui_panel_path>
 ```
 
-> ❗ **При экспорте ссылки (или QR-кода) клиенту из панели** замените в ней `security=none` на `security=tls`.
-> TLS в инбаунде выключен (его делает Caddy), и без этой правки клиент не подключится.
-> QR-код из панели содержит ту же ссылку, поэтому тоже нерабочий — отдавайте клиенту ссылку/QR уже с `security=tls`.
-> Подробнее — в [README.md](README.md), callout в самом начале.
+> ❗ **When exporting a client link (or QR code) from the panel**, change `security=none` to `security=tls` in it.
+> TLS is disabled in the inbound (Caddy handles it), and without this edit the client cannot connect.
+> The QR code from the panel encodes the same link, so it's also broken — hand the client a link/QR that already contains `security=tls`.
+> Details — see the callout at the top of [README.md](README.md).
 
 ---
 
-### 2.7. Удалить технического пользователя (рекомендуется)
+### 2.7. Remove the technical user (recommended)
 
-`deploy_user` — технический пользователь, нужен только Ansible для этапа 2. После успешного развёртывания он больше не нужен.
+`deploy_user` is a technical user needed only by Ansible for stage 2. After a successful deployment it is no longer needed.
 
-Подключитесь под основным пользователем (или root) и удалите:
+Connect as your main user (or root) and remove it:
 
 ```bash
 sudo userdel -r <deploy_user>
 sudo rm -f /etc/sudoers.d/<deploy_user>
 ```
 
-> **Важно:** убедитесь, что у вас есть другой пользователь с SSH-доступом, прежде чем удалять `deploy_user`.
+> **Important:** make sure you have another user with SSH access before deleting `deploy_user`.
 
 ---
 
-## Обновление конфигурации на работающем сервере
+## Updating Configuration on a Running Server
 
-Только этап 2 — он идемпотентен и работает через `ssh_port`:
+Run stage 2 only — it is idempotent and connects via `ssh_port`:
 
 ```bash
 ansible-playbook -i inventory.ini site-configure.yml
 ```
 
-Используйте для: обновления `x-ui.db`, изменения Caddyfile, изменения версии 3x-ui.
+Use this to: update `x-ui.db`, change the Caddyfile, or change the 3x-ui version.
 
 ---
 
-## Если что-то пошло не так
+## Troubleshooting
 
-**Этап 1 завис или упал до конца:**
-Сервер мог перезагрузиться со старым SSH-конфигом. Попробуйте подключиться на порту 22 от root — если получается, значит этап 1 не завершился. Исправьте проблему и запустите заново.
+**Stage 1 hung or failed before finishing:**
+The server may have rebooted with the old SSH config. Try connecting on port 22 as root — if it works, stage 1 did not complete. Fix the issue and re-run.
 
-**apt завис надолго:**
-Это нормально — некоторые хостеры запускают обновления сразу после provisioning.
-Playbook ждёт до 30 минут (30 попыток × 60 секунд). В логе будут видны RETRYING-сообщения.
+**apt is blocked for a long time:**
+This is normal — some hosting providers run updates right after provisioning.
+The playbook waits up to 30 minutes (30 retries × 60 seconds). You'll see RETRYING messages in the output.
 
-**Caddy не получил сертификат:**
+**Caddy did not obtain a certificate:**
 ```bash
 sudo systemctl status caddy
 sudo journalctl -u caddy -n 50
 ```
-Убедитесь что DNS настроен (`dig +short <hostname>` возвращает IP сервера) и порт 80 открыт (`allowed_tcp_ports` содержит `80`).
+Make sure DNS is configured (`dig +short <hostname>` returns the server IP) and port 80 is open (`allowed_tcp_ports` contains `80`).
 
-**Панель x-ui недоступна:**
-Проверьте что Caddy запущен и `xui_panel_path` указан корректно:
+**x-ui panel is not accessible:**
+Check that Caddy is running and `xui_panel_path` is correct:
 ```bash
 sudo systemctl status caddy
-curl -s http://localhost:<xui_panel_port>  # должен ответить
+curl -s http://localhost:<xui_panel_port>  # should respond
 ```

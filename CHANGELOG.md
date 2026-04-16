@@ -1,217 +1,188 @@
 # Changelog
 
-## [0.9.1] — 2026-03-28
-
-### Исправлено
-
-- **`init.yml`** — добавлен `DEBIAN_FRONTEND=noninteractive` в apt-задачу установки пакетов. Без этого `ipset-persistent` задаёт интерактивный вопрос при установке («сохранить текущие правила?»), что блокирует Ansible.
-
----
-
-## [0.9.0] — 2026-03-27
-
-### Исправлено
-
-- **`caddy-override.conf.j2`** — ExecStartPost теперь запускается с правами root (префикс `+`). Caddy работает от пользователя `caddy`, без `+` cert-sync.sh не мог записывать в `/etc/ssl/`
-- **`Caddyfile.j2`** — добавлен явный блок `http://{{ hostname }}` на порту 80 (обязателен для ACME HTTP-01 challenge). Без него Caddy не слушал порт 80
-- **`Caddyfile.j2`** — убран глобальный `https_port`, вместо него явный порт в блоке сайта: `{{ hostname }}:{{ caddy_https_port }}`
-- **`init.yml`** — ipset set теперь создаётся всегда (даже пустым), чтобы iptables правила не падали при отсутствии хостов в `ipset_hosts`
-
-### Добавлено
-
-- Переменная `caddy_https_port` (default: `8443`) — порт HTTPS для Caddy, не конфликтует с x-ray на 443; сертификат получается через HTTP-01 на порту 80
-- Пакет `ipset-persistent` в `extra_packages` — обеспечивает корректное сохранение и восстановление ipset при загрузке (плагин `10-ipsets` запускается до `15-ip4tables`)
-- Переводы `README_EN.md`, `INSTALL_EN.md`, `CHANGELOG_EN.md`
-
-### Изменено
-
-- Переменная `domain` удалена — везде используется `hostname` (FQDN сервера используется и для hostname, и для ACME-сертификата)
-- Флаг `install_caddy` удалён — Caddy является обязательным компонентом
-- **`configure.yml`** — после перезагрузки: останавливаем x-ui, ждём сертификат от Caddy (до 5 минут), запускаем cert-sync, запускаем x-ui. Плейбук завершается только когда всё гарантированно работает
-
----
+**Language:** English · [Русский](CHANGELOG_RU.md)
 
 ## [0.8.0] — 2026-03-27
 
-### Тестирование на чистой VM, исправление критических ошибок
+### Testing on a clean VM, critical bug fixes
 
-### Исправлено
+### Fixed
 
-- **`configure.yml`** — убран `test_command: systemctl is-active caddy` из задачи финальной перезагрузки. При `install_caddy: false` или медленном ACME команда всегда завершалась ошибкой, Ansible висел 5 минут до таймаута.
-- **`init.yml`** — применение iptables, сохранение netfilter-persistent и перезагрузка объединены в один `async: 30, poll: 0` shell-скрипт. Раньше применение правил разрывало SSH-соединение до того как Ansible успевал выполнить следующие задачи.
-- **`init.yml`** — удаление `authorized_keys` root перенесено в тот же финальный async-скрипт, иначе задача выполнялась после разрыва соединения и падала с ошибкой.
-- **`init.yml`** — убраны `{{ item.key }}` из имён задач (вызывало предупреждение `'item' is undefined`). Отображение имени пользователя перенесено в `loop_control.label`.
-- **`init.yml`** — копирование `.bashrc` пропускается если файл не существует (`lookup('fileglob', ...)`), вместо ошибки.
-- **`ansible.cfg`** — добавлен `bin_ansible_callbacks = True` для корректной работы счётчика задач `community.general.counter_enabled`.
-- **`group_vars/new_vps.yml.example`** — убран лишний знак `=` в значениях BBR (`net.core.default_qdisc: = fq` → `net.core.default_qdisc: fq`).
+- **`configure.yml`** — removed `test_command: systemctl is-active caddy` from the final reboot task. When `install_caddy: false` or ACME was slow, the command always failed and Ansible would hang for 5 minutes until timeout.
+- **`init.yml`** — applying iptables rules, saving netfilter-persistent, and rebooting are now combined into a single `async: 30, poll: 0` shell script. Previously, applying the rules would drop the SSH connection before Ansible could execute the subsequent tasks.
+- **`init.yml`** — removal of root's `authorized_keys` moved into the same final async script; otherwise the task would run after the connection was dropped and fail with an error.
+- **`init.yml`** — removed `{{ item.key }}` from task names (caused `'item' is undefined` warnings). The username is now shown via `loop_control.label`.
+- **`init.yml`** — `.bashrc` copying is skipped if the file does not exist (`lookup('fileglob', ...)`), instead of raising an error.
+- **`ansible.cfg`** — added `bin_ansible_callbacks = True` for correct operation of the `community.general.counter_enabled` task counter.
+- **`group_vars/new_vps.yml.example`** — removed spurious `=` sign in BBR values (`net.core.default_qdisc: = fq` → `net.core.default_qdisc: fq`).
 
-### Добавлено
+### Added
 
-- **`configure.yml`** — задача `[3xui] Обновить пути к сертификатам в БД`: после заливки `x-ui.db` автоматически обновляет `webCertFile` и `webKeyFile` через `sqlite3`, используя переменные `certs_dest_dir` и `domain`. Устраняет необходимость вручную менять пути в x-ui.db на эталонном сервере при смене домена.
-- **`configure.yml`** — рекомендация удалить `deploy_user` после завершения настройки отображается в финальном сообщении.
-- **`INSTALL.md`** — шаг 2.7 «Удалить технического пользователя» с командой `userdel -r`.
-- **`README.md`** — примечание об удалении `deploy_user` после этапа 2.
-- **`init.yml`** — загрузка модуля `tcp_bbr` (`modprobe`) и постоянная активация через `/etc/modules-load.d/tcp_bbr.conf`.
-- **`templates/sysctl.conf.j2`** — шаблон для `/etc/sysctl.d/99-custom.conf`, заменяет модуль `ansible.posix.sysctl`.
-- **`.gitkeep`** — файл-заглушка в `roles/bootstrap/files/` чтобы каталог существовал после `git clone`.
+- **`configure.yml`** — task `[3xui] Update certificate paths in DB`: after uploading `x-ui.db`, automatically updates `webCertFile` and `webKeyFile` via `sqlite3` using the `certs_dest_dir` and `domain` variables. Eliminates the need to manually update paths in x-ui.db on the reference server when changing the domain.
+- **`configure.yml`** — a recommendation to remove `deploy_user` after setup is complete is displayed in the final message.
+- **`INSTALL.md`** — step 2.7 "Remove the technical user" with the `userdel -r` command.
+- **`README.md`** — note about removing `deploy_user` after stage 2.
+- **`init.yml`** — loading the `tcp_bbr` module (`modprobe`) and persistent activation via `/etc/modules-load.d/tcp_bbr.conf`.
+- **`templates/sysctl.conf.j2`** — template for `/etc/sysctl.d/99-custom.conf`, replaces the `ansible.posix.sysctl` module.
+- **`.gitkeep`** — placeholder file in `roles/bootstrap/files/` so the directory exists after `git clone`.
 
-### Удалено
+### Removed
 
-- **`requirements.yml`** — убран вместе с зависимостью от коллекции `ansible.posix`. Все модули заменены на `ansible.builtin`: `authorized_key` → `copy`, `sysctl` → `template + command`.
+- **`requirements.yml`** — removed along with the dependency on the `ansible.posix` collection. All modules replaced with `ansible.builtin`: `authorized_key` → `copy`, `sysctl` → `template + command`.
 
 ---
 
 ## [0.7.0] — 2026-03-27
 
-### INSTALL.md — полная переработка
+### INSTALL.md — complete rewrite
 
-### Изменено
+### Changed
 
-- **INSTALL.md** — переписан с нуля: добавлен шаг `git clone`, полная таблица всех параметров с разбивкой на обязательные/дополнительные, инструкции по SSH-ключам (несколько ключей на пользователя), хэшу пароля и опциональному `.bashrc`, vault-шифрованию.
-- **`group_vars/new_vps.yml.example`** — убраны захардкоженные имена пользователей, заменены нейтральным `myuser`. Убран второй тестовый пользователь.
-- **`CHANGELOG.md`** — убраны упоминания конкретных имён и доменов.
+- **INSTALL.md** — rewritten from scratch: added `git clone` step, full parameter table split into required/optional, instructions for SSH keys (multiple keys per user), password hash, optional `.bashrc`, and vault encryption.
+- **`group_vars/new_vps.yml.example`** — removed hardcoded usernames, replaced with a neutral `myuser`. Removed the second test user.
+- **`CHANGELOG.md`** — removed mentions of specific names and domains.
 
 ---
 
 ## [0.6.0] — 2026-03-27
 
-### SSH-ключи в конфиге, убран .bashrc
+### SSH keys in config, removed .bashrc support
 
-Устранена последняя зависимость от файлов пользователей. Теперь для развёртывания нового сервера нужен только `x-ui.db`.
+Eliminated the last dependency on user-specific files. Now only `x-ui.db` is needed to deploy a new server.
 
-### Изменено
+### Changed
 
-- **SSH authorized_keys** — вместо копирования файла `files/<user>/authorized_keys` ключи теперь задаются списком `ssh_public_keys` прямо в `group_vars/new_vps.yml`. Используется модуль `authorized_key` с `subelements`.
-- **`.bashrc`** — поддержка копирования `.bashrc` для пользователей и root убрана (системный дефолт достаточен для Ansible-управляемых серверов).
-- **`group_vars/new_vps.yml`** — убраны флаги `has_authorized_keys` и `has_bashrc`.
-- **`INSTALL.md`** — упрощена Часть A: вместо `scp authorized_keys` + `mkdir` — одна команда `cat ~/.ssh/id_ed25519.pub` и вставка в конфиг.
+- **SSH authorized_keys** — instead of copying the `files/<user>/authorized_keys` file, keys are now defined as a list `ssh_public_keys` directly in `group_vars/new_vps.yml`. Uses the `authorized_key` module with `subelements`.
+- **`.bashrc`** — support for copying `.bashrc` for users and root has been removed (the system default is sufficient for Ansible-managed servers).
+- **`group_vars/new_vps.yml`** — removed `has_authorized_keys` and `has_bashrc` flags.
+- **`INSTALL.md`** — simplified Part A: instead of `scp authorized_keys` + `mkdir`, just one `cat ~/.ssh/id_ed25519.pub` command and paste into config.
 
-### Удалено
+### Removed
 
-- Таски `[users] Создать ~/.ssh`, `[users] authorized_keys` (файловый copy) из `init.yml`
-- Таски `[users] .bashrc` и `[users] .bashrc для root` из `init.yml`
-- Необходимость создавать каталоги `roles/bootstrap/files/<user>/`
+- Tasks `[users] Create ~/.ssh`, `[users] authorized_keys` (file copy) from `init.yml`
+- Tasks `[users] .bashrc` and `[users] .bashrc for root` from `init.yml`
+- The need to create `roles/bootstrap/files/<user>/` directories
 
-### Итог: файлы с эталонного сервера
+### Summary: files from the reference server
 
-Единственный файл, который нужно скопировать с эталона: **`x-ui.db`**.
+The only file that needs to be copied from the reference server: **`x-ui.db`**.
 
 ---
 
 ## [0.5.0] — 2026-03-27
 
-### Переработка документации
+### Documentation overhaul
 
-Полностью переписаны README.md и INSTALL.md для ясности и удобства использования.
+README.md and INSTALL.md completely rewritten for clarity and ease of use.
 
-### Изменено
+### Changed
 
-- **README.md** — добавлена схема «Быстрый старт», таблица портов, описание автоматического управления сертификатами. Убраны устаревшие ссылки на ручное копирование сертификатов.
-- **INSTALL.md** — структура A/B (один раз / каждый сервер). Пошаговые инструкции B4/B5 с чётким описанием что происходит на каждом шаге. Добавлен раздел «Если что-то пошло не так».
+- **README.md** — added Quick Start diagram, port table, description of automatic certificate management. Removed outdated references to manual certificate copying.
+- **INSTALL.md** — A/B structure (once / per server). Step-by-step instructions B4/B5 with a clear description of what happens at each step. Added "Troubleshooting" section.
 
 ---
 
 ## [0.4.0] — 2026-03-27
 
-### Управление сертификатами через Caddy ACME
+### Certificate management via Caddy ACME
 
-Ручное копирование TLS-сертификатов с эталонного сервера заменено на автоматическое получение через Let's Encrypt.
+Manual copying of TLS certificates from the reference server replaced with automatic provisioning via Let's Encrypt.
 
-### Изменено
+### Changed
 
-- **Сертификаты** — убран блок копирования из `init.yml`. Сертификаты теперь получаются автоматически через Caddy ACME (HTTP-01 challenge).
-- **Caddyfile** — добавлены: `email {{ acme_email }}`, `https_port {{ caddy_https_port }}`. Caddy слушает на нестандартном HTTPS-порту (default: 8443), чтобы не конфликтовать с 3x-ui на 443. HTTP-01 challenge работает через порт 80.
-- **iptables** — порты по умолчанию: `80` (ACME + HTTP), `443` (3x-ui), `8443` (Caddy HTTPS).
-- **Документация** — убраны `scp`-команды для сертификатов, добавлено описание ACME и cert-sync.
+- **Certificates** — removed the copy block from `init.yml`. Certificates are now obtained automatically via Caddy ACME (HTTP-01 challenge).
+- **Caddyfile** — added: `email {{ acme_email }}`, `https_port {{ caddy_https_port }}`. Caddy listens on a non-standard HTTPS port (default: 8443) to avoid conflicting with 3x-ui on 443. HTTP-01 challenge works via port 80.
+- **iptables** — default ports: `80` (ACME + HTTP), `443` (3x-ui), `8443` (Caddy HTTPS).
+- **Documentation** — removed `scp` commands for certificates, added description of ACME and cert-sync.
 
-### Добавлено
+### Added
 
-- `templates/cert-sync.sh.j2` — скрипт синхронизации сертификатов из Caddy в `certs_dest_dir`. Ждёт получения сертификата, копирует только если изменился, перезапускает x-ui.
-- `templates/caddy-override.conf.j2` — systemd drop-in для Caddy: `ExecStartPost=/usr/local/bin/cert-sync.sh`. Обеспечивает синхронизацию и при первом запуске, и при автообновлении.
-- Переменные: `acme_email`, `certs_dest_dir`, `caddy_https_port`.
+- `templates/cert-sync.sh.j2` — certificate sync script from Caddy to `certs_dest_dir`. Waits for the certificate to be issued, copies only if changed, restarts x-ui.
+- `templates/caddy-override.conf.j2` — systemd drop-in for Caddy: `ExecStartPost=/usr/local/bin/cert-sync.sh`. Ensures synchronization both on first start and on auto-renewal.
+- Variables: `acme_email`, `certs_dest_dir`, `caddy_https_port`.
 
-### Удалено
+### Removed
 
-- Блок `[certs]` из `init.yml` — больше не нужен (сертификаты выдаёт Caddy).
-- Необходимость копировать сертификаты с эталона (`scp .crt/.key`).
-- Переменная `certs` (словарь с `base_dir` и `files`) — заменена на `certs_dest_dir`.
+- The `[certs]` block from `init.yml` — no longer needed (Caddy issues the certificates).
+- The need to copy certificates from the reference server (`scp .crt/.key`).
+- The `certs` variable (dict with `base_dir` and `files`) — replaced by `certs_dest_dir`.
 
 ---
 
 ## [0.3.0] — 2026-03-27
 
-### Параметризация sysctl, iptables, Caddyfile
+### Parameterization of sysctl, iptables, Caddyfile
 
-Полностью убрана зависимость от файлов с эталонного сервера для системных конфигов.
+Eliminated all dependencies on files from the reference server for system configs.
 
-### Изменено
+### Changed
 
-- **sysctl** — вместо копирования файла `sysctl.conf` используется словарь `sysctl_settings` в конфиге. Ansible применяет каждый параметр через модуль `sysctl` (идемпотентно).
-- **iptables** — правила генерируются из Jinja2-шаблонов `iptables_v4.j2` / `iptables_v6.j2`. SSH-порт и ipset-сет подставляются автоматически. Настраиваются через `allowed_tcp_ports` / `allowed_udp_ports`.
-- **Caddyfile** — генерируется из шаблона `Caddyfile.j2`. URL проксирования задаётся через `caddy_redirect_url` (default: `127.0.0.1:2053`). TLS-пути берутся из `certs.base_dir`.
-- **ipset в iptables** — адреса из `ipset_hosts` получают полный доступ (`-j ACCEPT` на все протоколы).
+- **sysctl** — instead of copying a `sysctl.conf` file, a `sysctl_settings` dictionary is used in the config. Ansible applies each parameter via the `sysctl` module (idempotently).
+- **iptables** — rules are generated from Jinja2 templates `iptables_v4.j2` / `iptables_v6.j2`. SSH port and ipset are substituted automatically. Configured via `allowed_tcp_ports` / `allowed_udp_ports`.
+- **Caddyfile** — generated from the `Caddyfile.j2` template. The proxy URL is set via `caddy_redirect_url` (default: `127.0.0.1:2053`). TLS paths are taken from `certs.base_dir`.
+- **ipset in iptables** — addresses from `ipset_hosts` receive full access (`-j ACCEPT` on all protocols).
 
-### Добавлено
+### Added
 
-- `templates/iptables_v4.j2` — шаблон правил IPv4 с поддержкой ipset
-- `templates/iptables_v6.j2` — шаблон правил IPv6
-- `templates/Caddyfile.j2` — шаблон конфига Caddy
-- Переменные: `sysctl_settings`, `allowed_tcp_ports`, `allowed_udp_ports`, `caddy_redirect_url`
+- `templates/iptables_v4.j2` — IPv4 rules template with ipset support
+- `templates/iptables_v6.j2` — IPv6 rules template
+- `templates/Caddyfile.j2` — Caddy config template
+- Variables: `sysctl_settings`, `allowed_tcp_ports`, `allowed_udp_ports`, `caddy_redirect_url`
 
-### Удалено
+### Removed
 
-- Необходимость копировать с эталона: `sysctl.conf`, `rules.v4`, `rules.v6`, `Caddyfile`
-- Переменные: `sysctl_src`, `iptables_rules_v4_src`, `iptables_rules_v6_src`
+- The need to copy from the reference server: `sysctl.conf`, `rules.v4`, `rules.v6`, `Caddyfile`
+- Variables: `sysctl_src`, `iptables_rules_v4_src`, `iptables_rules_v6_src`
 
 ---
 
 ## [0.2.1] — 2026-03-27
 
-### Исправлено
+### Fixed
 
-- **Документация:** убрано ошибочное утверждение «Playbook идемпотентен». Этап 1 (`site-init.yml`) предназначен **только для первичного развёртывания** — после смены SSH-порта и закрытия root повторный запуск невозможен. Этап 2 (`site-configure.yml`) идемпотентен. В `README.md` и `INSTALL.md` добавлены соответствующие предупреждения.
+- **Documentation:** removed the erroneous statement "Playbook is idempotent". Stage 1 (`site-init.yml`) is intended **only for initial deployment** — once the SSH port is changed and root is locked, re-running is not possible. Stage 2 (`site-configure.yml`) is idempotent. Corresponding warnings added to `README.md` and `INSTALL.md`.
 
 ---
 
 ## [0.2.0] — 2026-03-27
 
-### Универсализация проекта
+### Project generalization
 
-Полная параметризация — убраны все захардкоженные имена пользователей, домен и пути.
+Full parameterization — all hardcoded usernames, domain names, and paths removed.
 
-### Изменено
+### Changed
 
-- **Пользователи** — единый словарь `users` с флагами (`sudo_nopasswd`, `has_authorized_keys`, `has_bashrc`). Таски итерируют по словарю вместо отдельных блоков для каждого пользователя.
-- **Переменная `deploy_user`** — имя пользователя для этапа 2 (ранее захардкожено).
-- **Переменная `domain`** — домен для путей к сертификатам (ранее захардкожено).
-- **Сертификаты** перенесены из `/home/ca/certs/<домен>/` в `/etc/ssl/<домен>/`. Путь настраивается через `certs.base_dir`. Владелец — root.
-- **3x-ui и Caddy** — опциональные через флаги `install_3xui` и `install_caddy` (по умолчанию `true`).
-- **`ansible.cfg`** — `interpreter_python` изменён с `/usr/bin/python3.13` на `auto_silent`.
-- **`site-init.yml` / `site-configure.yml`** — убраны хардкоды из комментариев.
-- **Inventory** объединён в один файл `inventory.ini` вместо двух (`inventory-init.ini` + `inventory-configure.ini`). Порт и пользователь для каждого этапа теперь задаются в самих playbook.
-- **ipset** — вместо копирования файла `ipset.conf` с эталонного сервера, IP-адреса задаются списком `ipset_hosts` в конфиге. Имя set'а задаётся через `ipset_set_name` (по умолчанию `allowed_hosts`). Ansible создаёт set и добавляет адреса автоматически.
+- **Users** — single `users` dictionary with flags (`sudo_nopasswd`, `has_authorized_keys`, `has_bashrc`). Tasks iterate over the dictionary instead of having separate blocks for each user.
+- **Variable `deploy_user`** — username for stage 2 (previously hardcoded).
+- **Variable `domain`** — domain for certificate paths (previously hardcoded).
+- **Certificates** moved from `/home/ca/certs/<domain>/` to `/etc/ssl/<domain>/`. Path configured via `certs.base_dir`. Owner is root.
+- **3x-ui and Caddy** — optional via `install_3xui` and `install_caddy` flags (default `true`).
+- **`ansible.cfg`** — `interpreter_python` changed from `/usr/bin/python3.13` to `auto_silent`.
+- **`site-init.yml` / `site-configure.yml`** — hardcoded values removed from comments.
+- **Inventory** consolidated into a single `inventory.ini` file instead of two (`inventory-init.ini` + `inventory-configure.ini`). Port and user for each stage are now set in the playbooks themselves.
+- **ipset** — instead of copying an `ipset.conf` file from the reference server, IP addresses are defined as a list `ipset_hosts` in the config. The set name is set via `ipset_set_name` (default `allowed_hosts`). Ansible creates the set and adds addresses automatically.
 
-### Добавлено
+### Added
 
-- `inventory.ini.example` — единый шаблон inventory.
-- `group_vars/new_vps.yml.example` — шаблон переменных (коммитится в git).
-- `CHANGELOG.md` — этот файл.
+- `inventory.ini.example` — single inventory template.
+- `group_vars/new_vps.yml.example` — variables template (committed to git).
+- `CHANGELOG.md` — this file.
 
-### Удалено
+### Removed
 
-- `inventory-init.ini.example` и `inventory-configure.ini.example` — заменены единым `inventory.ini.example`.
+- `inventory-init.ini.example` and `inventory-configure.ini.example` — replaced by a single `inventory.ini.example`.
 
-### Безопасность
+### Security
 
-- `.gitignore` расширен: `roles/bootstrap/files/`, `group_vars/new_vps.yml`, `inventory-*.ini` больше не попадут в коммит.
+- `.gitignore` expanded: `roles/bootstrap/files/`, `group_vars/new_vps.yml`, `inventory-*.ini` will no longer be included in commits.
 
 ---
 
 ## [0.1.0] — 2026-03-27
 
-### Первая версия
+### Initial release
 
-- Двухэтапное развёртывание VPS (init + configure).
-- Установка пакетов, создание пользователей, SSH hardening, sysctl, iptables, ipset.
-- Установка 3x-ui с загрузкой БД, Caddy с Caddyfile.
-- Шаблон sshd_config через Jinja2.
+- Two-stage VPS deployment (init + configure).
+- Package installation, user creation, SSH hardening, sysctl, iptables, ipset.
+- 3x-ui installation with DB upload, Caddy with Caddyfile.
+- sshd_config template via Jinja2.

@@ -1,106 +1,114 @@
 # ansible-vps
 
-Ansible playbook для быстрого развёртывания VPS-ноды с 3x-ui и Caddy.
+**Language:** English · [Русский](README_RU.md)
 
-Берёт свежеустановленный Debian 12/13 с root-доступом по SSH и за два этапа превращает его в готовую к работе ноду: hardened SSH, firewall, пользователи, [3x-ui](https://github.com/MHSanaei/3x-ui) с базой данных от эталонного сервера, Caddy как reverse-proxy с автоматическим TLS-сертификатом через Let's Encrypt.
+![Ansible](https://img.shields.io/badge/Ansible-2.9%2B-EE0000?logo=ansible&logoColor=white)
+![Debian](https://img.shields.io/badge/Debian-12%20%7C%2013-A81D33?logo=debian&logoColor=white)
+![Caddy](https://img.shields.io/badge/Caddy-2.x-1F88C0?logo=caddy&logoColor=white)
+![3x-ui](https://img.shields.io/badge/3x--ui-latest-4CAF50)
+![Xray](https://img.shields.io/badge/Xray-VLESS%20%2B%20WebSocket-7B1FA2)
+![Let's Encrypt](https://img.shields.io/badge/Let's_Encrypt-ACME-003A70?logo=letsencrypt&logoColor=white)
 
-> ⚠️ **Сценарий заточен под xray VLESS + WebSocket.**
-> Caddy на порту 443 проксирует WebSocket-трафик по секретному пути на xray (`localhost:xray_port`). Это работает для конфигураций VLESS/VMess/Trojan с транспортом `ws` (WebSocket). Другие транспорты (TCP, Reality, gRPC, mKCP, QUIC, xHTTP и т.д.) через этот reverse-proxy не пройдут — для них нужна другая архитектура (например, xray слушает 443 напрямую, без Caddy).
->
-> Поддержка других типов подключений появится позже — либо в этом же репозитории, либо в отдельных сценариях Ansible.
+Ansible playbook for rapid deployment of a VPS node with 3x-ui and Caddy.
 
-> ❗ **ВАЖНО: после получения ссылки из 3x-ui замените `security=none` на `security=tls`**
+Takes a freshly installed Debian 12/13 with root SSH access and turns it into a production-ready node in two stages: hardened SSH, firewall, users, [3x-ui](https://github.com/MHSanaei/3x-ui) with a database from a reference server, and Caddy as a reverse proxy with automatic TLS certificates via Let's Encrypt.
+
+> ⚠️ **This playbook targets xray VLESS + WebSocket.**
+> Caddy on port 443 proxies WebSocket traffic at a secret path to xray (`localhost:xray_port`). This works for VLESS/VMess/Trojan with the `ws` (WebSocket) transport. Other transports (TCP, Reality, gRPC, mKCP, QUIC, xHTTP, etc.) will not pass through this reverse proxy — they need a different architecture (for example xray listening on 443 directly, without Caddy).
 >
-> TLS терминируется в Caddy (порт 443, сертификат от Let's Encrypt), а между Caddy и xray трафик идёт по localhost без шифрования — поэтому в инбаунде 3x-ui TLS **умышленно выключен**.
+> Support for other connection types will come later — either in this repository or as separate Ansible scenarios.
+
+> ❗ **IMPORTANT: after exporting a link from 3x-ui, change `security=none` to `security=tls`**
 >
-> Следствие: ссылка, которую панель генерирует для клиента (`vless://...?security=none&type=ws&...`), из коробки **не будет работать**. Клиент увидит `security=none` и не будет ожидать TLS от сервера — а сервер (Caddy) отдаёт именно TLS.
+> TLS is terminated at Caddy (port 443, Let's Encrypt certificate), and traffic between Caddy and xray flows over localhost without encryption — so TLS is **deliberately disabled in the 3x-ui inbound**.
 >
-> **Это же касается QR-кода** из панели — он кодирует ровно ту же ссылку с `security=none`, поэтому тоже нерабочий. Сканирование QR напрямую подключение не поднимет.
+> As a consequence, the link the panel generates for clients (`vless://...?security=none&type=ws&...`) **will not work as-is**. The client sees `security=none` and won't expect TLS from the server — but the server (Caddy) is serving TLS.
 >
-> **Что делать:** в ссылке для клиента (или в шаблоне подписки) руками меняем `security=none` → `security=tls` и только потом отдаём клиенту (в виде ссылки или нового QR-кода, сгенерированного из исправленной строки). После этого подключение работает.
+> **The same applies to the QR code** exported from the panel — it encodes the same string with `security=none`, so it's also broken. Scanning the QR directly won't establish a connection.
 >
-> Этот шаг нужно делать **при каждой генерации ссылки** из панели. Альтернатива — настроить подписочный сервис, который подменяет параметр автоматически.
+> **Fix:** in the client link (or subscription template), manually change `security=none` → `security=tls` before handing it off to the client (as a link, or as a new QR code generated from the fixed string). After that the connection works.
+>
+> This step must be done **every time** you export a link from the panel. Alternatively, set up a subscription service that rewrites the parameter automatically.
 
 ---
 
-## Быстрый старт
+## Quick Start
 
-Подробная пошаговая инструкция: **[INSTALL.md](INSTALL.md)**
+Full step-by-step instructions: **[INSTALL.md](INSTALL.md)**
 
 ```
-Шаг 1 — подготовка (один раз, локально на control node):
-         клонировать репо, настроить конфиг, скопировать x-ui.db
-
-Шаг 2 — для каждого нового сервера:
-         site-init.yml → site-configure.yml
+Step 1 — environment setup and node preparation:
+         clone repo, configure vars, copy x-ui.db → site-init.yml
+Step 2 — node configuration:
+         site-configure.yml
 ```
 
 ---
 
-## Как это работает
+## How It Works
 
-### Этап 1 — `site-init.yml` (подключение: порт 22, пользователь root)
+### Stage 1 — `site-init.yml` (connection: port 22, user root)
 
-Выполняется **один раз** на свежем сервере. После выполнения root закрыт, SSH переходит на кастомный порт — повторный запуск невозможен.
+Runs **once** on a fresh server. After it completes, root is locked and SSH moves to a custom port — re-running is not possible.
 
-Что делает:
+What it does:
 - `apt full-upgrade`
-- Установка пакетов
-- Создание пользователей (SSH-ключи, пароли, sudo)
-- Установка hostname
-- SSH hardening (кастомный порт, root закрыт, только ключи)
+- Package installation
+- User creation (SSH keys, passwords, sudo)
+- Hostname setup
+- SSH hardening (custom port, root locked, key-only auth)
 - sysctl, ipset, iptables
-- Перезагрузка
+- Reboot
 
-### Этап 2 — `site-configure.yml` (подключение: `ssh_port`, `deploy_user`)
+### Stage 2 — `site-configure.yml` (connection: `ssh_port`, `deploy_user`)
 
-Можно запускать повторно. Идемпотентен.
+Can be re-run. Idempotent.
 
-Что делает:
-- Установка 3x-ui + загрузка `x-ui.db` (автоматически: `webListen=127.0.0.1`, `webBasePath=xui_panel_path`, пути к сертификатам очищаются)
-- Установка Caddy + деплой Caddyfile (прокси на панель x-ui + WebSocket на xray + fallback на сайт-камуфляж)
-- Финальная перезагрузка → Caddy получает TLS-сертификат через Let's Encrypt → запуск x-ui
+What it does:
+- Install 3x-ui + upload `x-ui.db` (automatically: `webListen=127.0.0.1`, `webBasePath=xui_panel_path`, certificate paths cleared)
+- Install Caddy + deploy Caddyfile (reverse-proxy to x-ui panel + WebSocket to xray + fallback to camouflage site)
+- Final reboot → Caddy obtains a TLS certificate via Let's Encrypt → start x-ui
 
-> **После успешного развёртывания** `deploy_user` больше не нужен. Рекомендуется удалить его вручную:
+> **After a successful deployment**, `deploy_user` is no longer needed. It is recommended to delete it manually:
 > ```bash
 > sudo userdel -r <deploy_user>
 > sudo rm -f /etc/sudoers.d/<deploy_user>
 > ```
 
-### Схема трафика
+### Traffic flow
 
 ```
-Клиент → 443 (Caddy, TLS)
-           ├─ путь xui_panel_path/* → localhost:xui_panel_port (панель x-ui)
-           ├─ путь xray_ws_path/*   → localhost:xray_port (xray, WebSocket)
-           └─ всё остальное         → caddy_fallback_url (редирект, камуфляж)
+Client → 443 (Caddy, TLS)
+           ├─ path xui_panel_path/* → localhost:xui_panel_port (x-ui panel)
+           ├─ path xray_ws_path/*   → localhost:xray_port (xray, WebSocket)
+           └─ everything else       → caddy_fallback_url (redirect, camouflage)
 
-Let's Encrypt → HTTP-01 (порт 80) → Caddy получает и автообновляет сертификат
+Let's Encrypt → HTTP-01 (port 80) → Caddy obtains and auto-renews the certificate
 ```
 
-Панель x-ui работает на localhost по HTTP, TLS терминируется в Caddy. Сертификат обновляется автоматически раз в ~60 дней — никаких скриптов синхронизации или рестартов не требуется.
+The x-ui panel runs on localhost over plain HTTP; TLS is terminated at Caddy. The certificate is renewed automatically every ~60 days — no sync scripts or service restarts required.
 
 ---
 
-## Структура проекта
+## Project Structure
 
 ```
 ansible-vps/
-├── site-init.yml                    # Этап 1 (порт 22, root)
-├── site-configure.yml               # Этап 2 (кастомный порт, deploy_user)
-├── inventory.ini.example            # Шаблон inventory
+├── site-init.yml                    # Stage 1 (port 22, root)
+├── site-configure.yml               # Stage 2 (custom port, deploy_user)
+├── inventory.ini.example            # Inventory template
 ├── ansible.cfg
 ├── group_vars/
-│   ├── new_vps.yml.example          # Шаблон общих переменных группы (коммитится)
-│   └── new_vps.yml                  # Общие переменные (в .gitignore — не коммитится!)
-├── host_vars/                       # Переменные конкретных хостов (для мульти-сервера)
-│   ├── server1.yml.example          # Шаблон per-host переменных (коммитится)
-│   └── server1.yml                  # Ваши переменные для server1 (в .gitignore!)
+│   ├── new_vps.yml.example          # Shared group variables template (committed)
+│   └── new_vps.yml                  # Shared variables (in .gitignore — not committed!)
+├── host_vars/                       # Per-host variables (for multi-server)
+│   ├── server1.yml.example          # Per-host template (committed)
+│   └── server1.yml                  # Your server1 variables (in .gitignore!)
 ├── roles/bootstrap/
 │   ├── tasks/
-│   │   ├── main.yml                 # Диспетчер фаз
+│   │   ├── main.yml                 # Phase dispatcher
 │   │   ├── upgrade.yml              # apt full-upgrade
-│   │   ├── init.yml                 # Пользователи, SSH, firewall
+│   │   ├── init.yml                 # Users, SSH, firewall
 │   │   └── configure.yml            # 3x-ui, Caddy
 │   ├── handlers/main.yml
 │   ├── templates/
@@ -108,36 +116,36 @@ ansible-vps/
 │   │   ├── iptables_v4.j2
 │   │   ├── iptables_v6.j2
 │   │   └── Caddyfile.j2
-│   └── files/                       # Файлы с эталона (в .gitignore!)
-│       └── x-ui.db                  # единственный файл с эталона
-├── INSTALL.md                       # Пошаговая инструкция
+│   └── files/                       # Files from the reference server (in .gitignore!)
+│       └── x-ui.db                  # the only file taken from the reference server
+├── INSTALL.md                       # Step-by-step instructions
 └── CHANGELOG.md
 ```
 
-> ⚠️ **Имя `new_vps` используется в трёх местах и должно совпадать:**
-> 1. `inventory.ini` → секция `[new_vps]`
-> 2. `group_vars/new_vps.yml` → имя файла
+> ⚠️ **The name `new_vps` is used in three places and must match:**
+> 1. `inventory.ini` → `[new_vps]` group
+> 2. `group_vars/new_vps.yml` → filename
 > 3. `site-init.yml` / `site-configure.yml` → `hosts: new_vps`
 >
-> Если хочется переименовать группу (например, в `vpn_nodes`) — менять нужно **во всех трёх местах**, иначе Ansible не увидит переменные или плейбук не найдёт хосты.
+> If you want to rename the group (e.g. to `vpn_nodes`), it must be changed in **all three places** — otherwise Ansible won't pick up the variables or the playbook won't find the hosts.
 
 ---
 
-## Развёртывание на несколько серверов
+## Multi-Server Deployment
 
-Плейбук поддерживает одновременное развёртывание на несколько серверов. Ansible по умолчанию работает с хостами параллельно (5 форков, настраивается через `forks` в `ansible.cfg` или флагом `-f N`).
+The playbook supports deploying to multiple servers simultaneously. Ansible runs hosts in parallel by default (5 forks, tunable via `forks` in `ansible.cfg` or the `-f N` flag).
 
-### Разделение переменных
+### Splitting variables
 
 ```
-group_vars/new_vps.yml   → общие: users, ssh_port, acme_email, extra_packages, sysctl, ...
-host_vars/server1.yml    → индивидуальные для server1: hostname, (опционально) пути, порты
-host_vars/server2.yml    → индивидуальные для server2
+group_vars/new_vps.yml   → shared: users, ssh_port, acme_email, extra_packages, sysctl, ...
+host_vars/server1.yml    → per-host for server1: hostname, (optional) paths, ports
+host_vars/server2.yml    → per-host for server2
 ```
 
-**`hostname` обязательно должен быть уникальным для каждого сервера** — Caddy получает отдельный TLS-сертификат на каждый FQDN через Let's Encrypt.
+**`hostname` must be unique per server** — Caddy obtains a separate TLS certificate per FQDN via Let's Encrypt.
 
-### Пример на 3 сервера
+### Example for 3 servers
 
 `inventory.ini`:
 ```ini
@@ -165,18 +173,18 @@ hostname: "vps2.example.com"
 hostname: "vps3.example.com"
 ```
 
-> ⚠️ **Имя файла в `host_vars/` должно совпадать с именем хоста из `inventory.ini`** (левая колонка, не IP). То есть для `server1 ansible_host=1.2.3.4` → `host_vars/server1.yml`.
+> ⚠️ **The filename in `host_vars/` must match the inventory host name** (left column, not IP). So for `server1 ansible_host=1.2.3.4` → `host_vars/server1.yml`.
 
-### Предусловия
+### Preconditions
 
-- На каждый сервер заранее залит один и тот же SSH-ключ (`ssh-copy-id root@<IP>` на каждый IP)
-- Для каждого FQDN в DNS настроена A-запись, указывающая на IP соответствующего сервера
+- The same SSH key uploaded to every server beforehand (`ssh-copy-id root@<IP>` for each IP)
+- For each FQDN, a DNS A-record pointing to the corresponding server IP
 
-> **Про `x-ui.db`:** в проекте всегда ровно один файл `roles/bootstrap/files/x-ui.db`, и он раскатывается на все серверы группы — это by design, ферма получает одинаковые инбаунды. Если нужны разные инбаунды на разных серверах, их проще настроить вручную в панели после развёртывания (или разнести серверы по разным группам с отдельными БД).
+> **About `x-ui.db`:** the project always has exactly one `roles/bootstrap/files/x-ui.db`, and it gets rolled out to every server in the group — this is by design, a farm receives identical inbounds. If you need different inbounds per server, configure them manually in the panel after deployment (or split the servers into different groups with separate DB files).
 
-### Если серверы совсем разные
+### When servers are genuinely different
 
-Создайте отдельные группы:
+Create separate groups:
 
 ```ini
 [node_fr]
@@ -190,129 +198,130 @@ node_fr
 node_de
 ```
 
-И разложите переменные: `group_vars/node_fr.yml`, `group_vars/node_de.yml` для специфики каждой группы, `group_vars/new_vps.yml` для общего.
+And split variables: `group_vars/node_fr.yml`, `group_vars/node_de.yml` for group-specific settings, `group_vars/new_vps.yml` for everything shared.
 
 ---
 
-## Переменные
+## Variables
 
-Все настройки в `group_vars/new_vps.yml`. Шаблон: `group_vars/new_vps.yml.example`.
+All settings are in `group_vars/new_vps.yml`. Template: `group_vars/new_vps.yml.example`.
 
-### Сервер и доступ
+### Server and Access
 
-| Переменная | Пример | Описание |
+| Variable | Example | Description |
 |---|---|---|
-| `hostname` | `vps1.example.com` | FQDN сервера (используется для сертификата и hostname) |
-| `ssh_port` | `275` | SSH-порт после hardening |
-| `deploy_user` | `myuser` | Пользователь для этапа 2 (должен быть в `users`) |
+| `hostname` | `vps1.example.com` | Server FQDN — used as hostname and for the ACME certificate |
+| `ssh_port` | `275` | SSH port after hardening |
+| `deploy_user` | `myuser` | User for stage 2 (must be listed in `users`) |
 
-### Пользователи
+### Users
 
 ```yaml
 users:
   myuser:
     groups: ["sudo"]
     shell: /bin/bash
-    password: "$6$..."           # openssl passwd -6 'ПАРОЛЬ'
+    password: "$6$..."           # openssl passwd -6 'YOUR_PASSWORD'
     sudo_nopasswd: true
-    ssh_public_keys:             # публичные ключи: cat ~/.ssh/id_ed25519.pub
+    ssh_public_keys:             # public keys: cat ~/.ssh/id_ed25519.pub
       - "ssh-ed25519 AAAA... ansible"
-      - "ssh-ed25519 AAAA... laptop"   # можно несколько
+      - "ssh-ed25519 AAAA... laptop"   # multiple keys supported
   root:
-    password: "$6$..."
+    password: "$6$..."             # requires files/root/.bashrc
 ```
 
-### Сертификаты
+### Certificates
 
-Caddy получает и автообновляет TLS-сертификат через Let's Encrypt (HTTP-01 challenge на порту 80). Сертификат хранится в каталоге Caddy, сам x-ui работает на `127.0.0.1` по HTTP — доступ к панели через Caddy по секретному URL.
+Caddy obtains and auto-renews the TLS certificate via Let's Encrypt (HTTP-01 challenge on port 80). The cert is stored in Caddy's storage; x-ui itself runs on `127.0.0.1` over plain HTTP — panel access goes through Caddy at a secret URL.
 
 ```yaml
-acme_email: "admin@example.com"   # email для Let's Encrypt
+acme_email: "admin@example.com"   # email for Let's Encrypt
 ```
 
-> Ansible автоматически очищает `webCertFile`/`webKeyFile` в `x-ui.db` и
-> выставляет `webListen=127.0.0.1`, `webBasePath=xui_panel_path` — трогать
-> эталонный сервер не нужно.
+> Ansible automatically clears `webCertFile`/`webKeyFile` in `x-ui.db` and
+> sets `webListen=127.0.0.1`, `webBasePath=xui_panel_path` — no changes
+> needed on the reference server.
 
-> **Сертификаты в инбаундах 3X-UI** — если в настройках инбаундов используются отдельные
-> TLS-сертификаты, они **не копируются автоматически**. После развёртывания необходимо вручную
-> загрузить их на сервер и проверить пути и права доступа в настройках инбаунда.
+> **Inbound TLS certificates** — if any 3X-UI inbounds use TLS certificates (separate from the panel
+> certificate), they are **not copied automatically**. After deployment you must manually upload them
+> to the server and verify the paths and file permissions in the inbound settings.
 
 ### Caddy
 
-Caddy слушает порт 443, получает TLS-сертификат через ACME и управляет трафиком:
+Caddy listens on port 443, obtains a TLS certificate via ACME, and manages traffic:
 
-- **Панель x-ui** доступна по пути `xui_panel_path` (proxy на `localhost:xui_panel_port`)
-- **VPN-трафик** по пути `xray_ws_path` проксируется на xray через WebSocket
-- **Остальной трафик** редиректится на `caddy_fallback_url` (сайт-камуфляж)
+- **x-ui panel** is accessible at `xui_panel_path` (reverse-proxied to `localhost:xui_panel_port`)
+- **VPN traffic** matching `xray_ws_path` is proxied to xray via WebSocket
+- **Other traffic** is redirected to `caddy_fallback_url` (camouflage site)
 
-| Переменная | Пример | Описание |
+| Variable | Example | Description |
 |---|---|---|
-| `acme_email` | `admin@example.com` | Email для Let's Encrypt (обязательно) |
-| `caddy_fallback_url` | `https://example.com` | Сайт-камуфляж для не-VPN трафика |
-| `xui_panel_path` | `/my-secret-panel` | Секретный путь к панели x-ui (начинается с `/`) |
-| `xui_panel_port` | `54321` | Порт панели x-ui на localhost |
-| `xray_ws_path` | `/your-secret-path` | Секретный путь WebSocket (начинается с `/`) |
-| `xray_port` | `10000` | Порт xray на localhost (WebSocket) |
+| `acme_email` | `admin@example.com` | Email for Let's Encrypt (required) |
+| `caddy_fallback_url` | `https://example.com` | Camouflage site for non-VPN traffic |
+| `xui_panel_path` | `/my-secret-panel` | Secret path to the x-ui panel (starts with `/`) |
+| `xui_panel_port` | `54321` | x-ui panel port on localhost |
+| `xray_ws_path` | `/your-secret-path` | Secret WebSocket path for xray (starts with `/`) |
+| `xray_port` | `10000` | xray port on localhost (WebSocket) |
 
-> **debug в Caddyfile** — в шаблоне закомментирован. Раскомментировать для отладки,
-> отключить в продакшне — влияет на производительность и объём логов.
+> **debug in Caddyfile** — commented out in the template. Uncomment for debugging,
+> disable in production — affects performance and log volume.
 
 ### Firewall
 
 ```yaml
 allowed_tcp_ports:
   - 80    # HTTP (ACME HTTP-01 challenge)
-  - 443   # HTTPS (Caddy + xray через WebSocket)
+  - 443   # HTTPS (x-ray inbounds)
 
-ipset_set_name: "allowed_hosts"   # имя ipset-сета
-ipset_hosts:                       # полный доступ для этих IP
+ipset_set_name: "allowed_hosts"   # ipset name
+ipset_hosts:                       # full access for these IPs
   - "1.2.3.4"
 ```
 
-Дополнительные правила iptables добавляются напрямую в шаблоны:
+Additional iptables rules can be added directly to the templates:
 ```
 roles/bootstrap/templates/iptables_v4.j2
 roles/bootstrap/templates/iptables_v6.j2
 ```
-Дефолтные политики (`INPUT DROP`, `FORWARD DROP`, `OUTPUT ACCEPT`), loopback, ESTABLISHED и ICMP уже прописаны.
+Default policies (`INPUT DROP`, `FORWARD DROP`, `OUTPUT ACCEPT`), loopback, ESTABLISHED, and ICMP are already defined.
 
-### Прочее
+### Miscellaneous
 
-| Переменная | По умолчанию | Описание |
+| Variable | Default | Description |
 |---|---|---|
-| `install_3xui` | `true` | Установка 3x-ui |
-| `xui_version` | `""` (latest) | Версия 3x-ui |
-| `sysctl_settings` | см. конфиг | Параметры ядра |
-| `extra_packages` | см. конфиг | Дополнительные пакеты |
+| `install_3xui` | `true` | Install 3x-ui |
+| `xui_version` | `""` (latest) | 3x-ui version |
+| `sysctl_settings` | see config | Kernel parameters |
+| `extra_packages` | see config | Additional packages |
 
-> **Следующие пакеты устанавливаются автоматически** — не нужно добавлять их в `extra_packages`:
+> **The following packages are installed automatically** — no need to add them to `extra_packages`:
 > `iptables`, `iptables-persistent`, `ipset`, `ipset-persistent`, `netfilter-persistent`, `sqlite3`
 
 ---
 
-## Порты
+## Ports
 
 ```
-22          → только этап 1 (root, временно)
-ssh_port    → SSH после hardening
-80          → Caddy (ACME challenge)
-443         → Caddy (TLS): xray_ws_path/* → xray, остальное → fallback
+22              → stage 1 only (root, temporary)
+ssh_port        → SSH after hardening
+80              → Caddy (ACME challenge)
+443             → x-ray (VPN inbounds)
+127.0.0.1:4443  → Caddy (fallback from x-ray, localhost only)
 ```
 
 ---
 
-## Безопасность
+## Security
 
-- `group_vars/new_vps.yml` — хэши паролей, **не коммитится** (`.gitignore`)
-- `roles/bootstrap/files/` — БД x-ui — **не коммитится**
-- `inventory.ini` — реальные IP — **не коммитится**
-- Рекомендуется: `ansible-vault encrypt group_vars/new_vps.yml`
+- `group_vars/new_vps.yml` — password hashes, **not committed** (`.gitignore`)
+- `roles/bootstrap/files/` — x-ui DB — **not committed**
+- `inventory.ini` — real IPs — **not committed**
+- Recommended: `ansible-vault encrypt group_vars/new_vps.yml`
 
 ---
 
-## Требования
+## Requirements
 
-- **Ansible** 2.12+ (`brew install ansible` на macOS)
-- **Целевой сервер:** Debian 12 или 13, root по SSH на порту 22
-- **DNS:** домен должен указывать на IP сервера **до запуска этапа 2** (нужен для ACME)
+- **Ansible** 2.12+ (`brew install ansible` on macOS)
+- **Target server:** Debian 12 or 13, root SSH access on port 22
+- **DNS:** the domain must point to the server IP **before running stage 2** (required for ACME)
