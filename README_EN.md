@@ -6,6 +6,18 @@ Takes a freshly installed Debian 12/13 with root SSH access and turns it into a 
 
 > ⚠️ **This playbook targets xray VLESS + WebSocket.**
 > Caddy on port 443 proxies WebSocket traffic at a secret path to xray (`localhost:xray_port`). This works for VLESS/VMess/Trojan with the `ws` (WebSocket) transport. Other transports (TCP, Reality, gRPC, mKCP, QUIC, xHTTP, etc.) will not pass through this reverse proxy — they need a different architecture (for example xray listening on 443 directly, without Caddy).
+>
+> Support for other connection types will come later — either in this repository or as separate Ansible scenarios.
+
+> ❗ **IMPORTANT: after exporting a link from 3x-ui, change `security=none` to `security=tls`**
+>
+> TLS is terminated at Caddy (port 443, Let's Encrypt certificate), and traffic between Caddy and xray flows over localhost without encryption — so TLS is **deliberately disabled in the 3x-ui inbound**.
+>
+> As a consequence, the link the panel generates for clients (`vless://...?security=none&type=ws&...`) **will not work as-is**. The client sees `security=none` and won't expect TLS from the server — but the server (Caddy) is serving TLS.
+>
+> **Fix:** in the client link (or subscription template), manually change `security=none` → `security=tls`. After that the connection works.
+>
+> This step must be done **every time** you export a link from the panel. Alternatively, set up a subscription service that rewrites the parameter automatically.
 
 ---
 

@@ -8,6 +8,8 @@ Target OS: Debian 12/13. Managed from macOS or Linux (Ansible control node).
 
 **Supported xray transport: VLESS/VMess/Trojan over WebSocket only.** Caddy on 443 reverse-proxies the WebSocket path to `localhost:xray_port`. Other transports (TCP, Reality, gRPC, mKCP, QUIC, xHTTP) do not work with this setup — they require a different architecture (e.g. xray listening on 443 directly without Caddy).
 
+**TLS handling — critical operational gotcha.** TLS terminates at Caddy on 443; traffic between Caddy and xray on localhost is unencrypted by design, so the 3x-ui inbound has TLS disabled. As a result, links the panel exports contain `security=none`, which the client must manually change to `security=tls` — otherwise the client won't negotiate TLS with Caddy and the connection fails. This is documented prominently in both READMEs and INSTALL files (step 2.6). Don't "fix" the inbound by re-enabling TLS — that would double-encrypt and break things.
+
 ## Architecture
 
 ### Two-stage deployment

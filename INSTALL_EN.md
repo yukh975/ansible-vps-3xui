@@ -295,6 +295,10 @@ sudo systemctl status x-ui caddy
 # https://<hostname><xui_panel_path>
 ```
 
+> ❗ **When exporting a client link from the panel**, change `security=none` to `security=tls` in it.
+> TLS is disabled in the inbound (Caddy handles it), and without this edit the client cannot connect.
+> Details — see the callout at the top of [README_EN.md](README_EN.md).
+
 ---
 
 ### 2.7. Remove the technical user (recommended)
